@@ -1,0 +1,108 @@
+import crypto from "crypto";
+import { getDb } from "./mongodb";
+import { verifyTransaction } from "./paystack";
+import { bookDate, holdDate, releaseHold } from "./dateLocks";
+import { notifyBookingClash, notifyBookingConfirmed } from "./sms";
+import { depositFor, findPackage } from "@/data/packages";
+import type { BookingInput } from "./schemas";
+
+// needs_refund: the deposit was paid, but the date was taken by someone else
+// in the meantime (only possible if checkout outlasted the date hold).
+export type BookingStatus = "pending" | "deposit_paid" | "failed" | "needs_refund";
+
+export type Booking = BookingInput & {
+  reference: string;
+  packageName: string;
+  price: number; // GHS
+  deposit: number; // GHS
+  status: BookingStatus;
+  createdAt: Date;
+  paidAt?: Date;
+  payment?: { channel?: string; fees?: number | null };
+};
+
+let indexesEnsured = false;
+
+export async function bookingsCollection() {
+  const db = await getDb();
+  const collection = db.collection<Booking>("bookings");
+  if (!indexesEnsured) {
+    await collection.createIndex({ reference: 1 }, { unique: true });
+    await collection.createIndex({ createdAt: -1 });
+    indexesEnsured = true;
+  }
+  return collection;
+}
+
+// Holds the date first, so two people can never both reach checkout for it.
+// Returns null when the date is unavailable.
+export async function createBooking(input: BookingInput) {
+  const pkg = findPackage(input.packageId);
+  if (!pkg) throw new Error("Unknown package");
+
+  const reference = `BMV-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
+  if (!(await holdDate(input.date, reference))) return null;
+
+  const booking: Booking = {
+    ...input,
+    reference,
+    packageName: pkg.name,
+    price: pkg.price,
+    deposit: depositFor(pkg),
+    status: "pending",
+    createdAt: new Date(),
+  };
+
+  const collection = await bookingsCollection();
+  await collection.insertOne(booking);
+  return booking;
+}
+
+export async function cancelPendingBooking(booking: Booking) {
+  const collection = await bookingsCollection();
+  await collection.updateOne({ reference: booking.reference, status: "pending" }, { $set: { status: "failed" } });
+  await releaseHold(booking.date, booking.reference);
+}
+
+// Confirms a booking's deposit with Paystack. Safe to call repeatedly and
+// concurrently — from the callback page and the webhook — because the status
+// only moves off "pending" once, and only that call sends the SMS.
+export async function confirmBooking(reference: string) {
+  const collection = await bookingsCollection();
+  const booking = await collection.findOne({ reference });
+  if (!booking) return null;
+  if (booking.status !== "pending") return booking;
+
+  const tx = await verifyTransaction(reference);
+  const paidEnough = tx.currency === "GHS" && tx.amount >= Math.round(booking.deposit * 100);
+
+  if (tx.status === "success" && paidEnough) {
+    const gotDate = await bookDate(booking.date, reference);
+    const updated = await collection.findOneAndUpdate(
+      { reference, status: "pending" },
+      {
+        $set: {
+          status: gotDate ? "deposit_paid" : "needs_refund",
+          paidAt: new Date(),
+          payment: { channel: tx.channel, fees: tx.fees },
+        },
+      },
+      { returnDocument: "after" }
+    );
+    if (!updated) return collection.findOne({ reference }); // another call got here first
+    await (gotDate ? notifyBookingConfirmed(updated) : notifyBookingClash(updated));
+    return updated;
+  }
+
+  if (tx.status === "failed") {
+    await cancelPendingBooking(booking);
+    return collection.findOne({ reference });
+  }
+
+  return booking;
+}
+
+export async function listBookings() {
+  const collection = await bookingsCollection();
+  return collection.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(500).toArray();
+}

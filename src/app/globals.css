@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Brand palette, sampled from the B.Marvld logo. */
+:root {
+  --ink: #050505;
+  --ink-soft: #111111;
+  --cream: #f6e3c8;
+  --cream-dim: #c9b8a0;
+  --gold: #ffc800;
+}
+
+@theme inline {
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-cream: var(--cream);
+  --color-cream-dim: var(--cream-dim);
+  --color-gold: var(--gold);
+  --font-display: var(--font-josefin);
+  --font-sans: var(--font-montserrat);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--ink);
+  color: var(--cream);
+}
+
+::selection {
+  background: var(--gold);
+  color: var(--ink);
+}
+
+/* Viewfinder corner brackets, the logo's framing motif. */
+.viewfinder {
+  position: relative;
+}
+.viewfinder::before,
+.viewfinder::after {
+  content: "";
+  position: absolute;
+  width: 2.5rem;
+  height: 2.5rem;
+  pointer-events: none;
+  border-color: currentColor;
+}
+.viewfinder::before {
+  top: 0;
+  left: 0;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+.viewfinder::after {
+  bottom: 0;
+  right: 0;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+}
+
+.field {
+  @apply w-full rounded-none border border-cream/20 bg-ink-soft px-4 py-3 text-cream placeholder:text-cream/40 outline-none transition focus:border-gold;
+}
+
+.field-label {
+  @apply mb-2 block text-xs font-medium tracking-[0.2em] text-cream-dim uppercase;
+}
