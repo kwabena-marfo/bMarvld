@@ -3,7 +3,8 @@ import { getDb } from "./mongodb";
 import { verifyTransaction } from "./paystack";
 import { bookDate, holdDate, releaseHold } from "./dateLocks";
 import { notifyBookingClash, notifyBookingConfirmed } from "./sms";
-import { depositFor, findPackage } from "@/data/packages";
+import { findActivePackage } from "./packages";
+import { depositFor } from "@/data/packages";
 import type { BookingInput } from "./schemas";
 
 // needs_refund: the deposit was paid, but the date was taken by someone else
@@ -14,6 +15,7 @@ export type Booking = BookingInput & {
   reference: string;
   packageName: string;
   price: number; // GHS
+  depositPercent: number;
   deposit: number; // GHS
   status: BookingStatus;
   createdAt: Date;
@@ -34,20 +36,26 @@ export async function bookingsCollection() {
   return collection;
 }
 
-// Holds the date first, so two people can never both reach checkout for it.
-// Returns null when the date is unavailable.
-export async function createBooking(input: BookingInput) {
-  const pkg = findPackage(input.packageId);
-  if (!pkg) throw new Error("Unknown package");
+export type CreateBookingResult =
+  | { ok: true; booking: Booking }
+  | { ok: false; reason: "package_unavailable" | "date_taken" };
+
+// Prices the booking from the package as it is right now (never from the
+// browser), then holds the date so two people can never both reach checkout
+// for it.
+export async function createBooking(input: BookingInput): Promise<CreateBookingResult> {
+  const pkg = await findActivePackage(input.packageId);
+  if (!pkg) return { ok: false, reason: "package_unavailable" };
 
   const reference = `BMV-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
-  if (!(await holdDate(input.date, reference))) return null;
+  if (!(await holdDate(input.date, reference))) return { ok: false, reason: "date_taken" };
 
   const booking: Booking = {
     ...input,
     reference,
     packageName: pkg.name,
     price: pkg.price,
+    depositPercent: pkg.depositPercent,
     deposit: depositFor(pkg),
     status: "pending",
     createdAt: new Date(),
@@ -55,7 +63,7 @@ export async function createBooking(input: BookingInput) {
 
   const collection = await bookingsCollection();
   await collection.insertOne(booking);
-  return booking;
+  return { ok: true, booking };
 }
 
 export async function cancelPendingBooking(booking: Booking) {

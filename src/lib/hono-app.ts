@@ -1,13 +1,26 @@
 import { Hono } from "hono";
 import { z } from "zod";
-import { bookingSchema } from "./schemas";
+import {
+  blockDateSchema,
+  bookingSchema,
+  emailSchema,
+  loginCodeSchema,
+  packageSchema,
+  photoDetailsSchema,
+} from "./schemas";
 import { cancelPendingBooking, confirmBooking, createBooking, listBookings } from "./bookings";
 import { blockDate, unavailableDates, unblockDate, upcomingLocks } from "./dateLocks";
 import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } from "./paystack";
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
 import { deleteImage, getUploadedImage, signUpload } from "./cloudinary";
 import { addPhoto, listPhotos, removePhoto } from "./photos";
-import { photoCategories } from "@/data/gallery";
+import {
+  createPackage,
+  deletePackage,
+  listPackages,
+  reorderPackages,
+  updatePackage,
+} from "./packages";
 
 const app = new Hono().basePath("/api");
 
@@ -24,35 +37,52 @@ async function readJson(c: { req: { json: () => Promise<unknown> } }) {
   }
 }
 
+// First message per field, in the shape the forms map onto react-hook-form's setError.
+function fieldErrors(error: z.ZodError) {
+  const errors: Record<string, string> = {};
+  for (const issue of error.issues) {
+    errors[String(issue.path[0])] ??= issue.message;
+  }
+  return errors;
+}
+
 app.get("/availability", async (c) => {
   return c.json({ unavailableDates: await unavailableDates() });
 });
 
-const dateTakenResponse = {
-  error: "That date is no longer available",
-  fieldErrors: { date: "That date is no longer available — try another" },
-};
+app.get("/packages", async (c) => {
+  return c.json({ packages: await listPackages({ activeOnly: true }) });
+});
 
 // Creates a pending booking (holding the date) and starts a Paystack checkout
-// for the 50% deposit. The booking only becomes confirmed once the payment is
-// verified.
+// for the package's deposit. The booking only becomes confirmed once the
+// payment is verified.
 app.post("/bookings", async (c) => {
-  const body = await readJson(c);
-  if (body === undefined) return c.json({ error: "Invalid request body" }, 400);
-
-  const parsed = bookingSchema.safeParse(body);
+  const parsed = bookingSchema.safeParse(await readJson(c));
   if (!parsed.success) {
-    const fieldErrors: Record<string, string> = {};
-    for (const issue of parsed.error.issues) {
-      const key = String(issue.path[0]);
-      fieldErrors[key] ??= issue.message;
-    }
-    return c.json({ error: "Please fix the highlighted fields", fieldErrors }, 400);
+    return c.json({ error: "Please fix the highlighted fields", fieldErrors: fieldErrors(parsed.error) }, 400);
   }
 
-  const booking = await createBooking(parsed.data);
-  if (!booking) return c.json(dateTakenResponse, 409);
+  const result = await createBooking(parsed.data);
+  if (!result.ok) {
+    return result.reason === "date_taken"
+      ? c.json(
+          {
+            error: "That date is no longer available",
+            fieldErrors: { date: "That date is no longer available — try another" },
+          },
+          409
+        )
+      : c.json(
+          {
+            error: "That package is no longer available",
+            fieldErrors: { packageId: "That package is no longer available — choose another" },
+          },
+          409
+        );
+  }
 
+  const { booking } = result;
   const appUrl = process.env.APP_URL || new URL(c.req.url).origin;
 
   try {
@@ -97,8 +127,6 @@ app.post("/paystack/webhook", async (c) => {
 
 // ---------------------------------------------------------------- admin ----
 
-const emailSchema = z.object({ email: z.email().trim().toLowerCase() });
-
 app.post("/admin/login/code", async (c) => {
   const parsed = emailSchema.safeParse(await readJson(c));
   if (!parsed.success) return c.json({ error: "Enter a valid email" }, 400);
@@ -108,10 +136,8 @@ app.post("/admin/login/code", async (c) => {
   return c.json({ ok: true });
 });
 
-const verifyCodeSchema = emailSchema.extend({ code: z.string().trim().regex(/^\d{6}$/) });
-
 app.post("/admin/login/verify", async (c) => {
-  const parsed = verifyCodeSchema.safeParse(await readJson(c));
+  const parsed = loginCodeSchema.safeParse(await readJson(c));
   if (!parsed.success) return c.json({ error: "Enter the 6-digit code from your email" }, 400);
 
   if (!(await checkLoginCode(parsed.data.email, parsed.data.code))) {
@@ -135,14 +161,47 @@ admin.get("/bookings", async (c) => {
   return c.json({ bookings: await listBookings() });
 });
 
+admin.get("/packages", async (c) => {
+  return c.json({ packages: await listPackages({ activeOnly: false }) });
+});
+
+admin.post("/packages", async (c) => {
+  const parsed = packageSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    return c.json({ error: "Please fix the highlighted fields", fieldErrors: fieldErrors(parsed.error) }, 400);
+  }
+  return c.json({ package: await createPackage(parsed.data) });
+});
+
+// Partial updates, so the availability switch can send just { active }.
+admin.patch("/packages/:id", async (c) => {
+  const parsed = packageSchema.partial().safeParse(await readJson(c));
+  if (!parsed.success) {
+    return c.json({ error: "Please fix the highlighted fields", fieldErrors: fieldErrors(parsed.error) }, 400);
+  }
+  const pkg = await updatePackage(c.req.param("id"), parsed.data);
+  if (!pkg) return c.json({ error: "Package not found" }, 404);
+  return c.json({ package: pkg });
+});
+
+admin.delete("/packages/:id", async (c) => {
+  if (!(await deletePackage(c.req.param("id")))) return c.json({ error: "Package not found" }, 404);
+  return c.json({ ok: true });
+});
+
+admin.post("/packages/reorder", async (c) => {
+  const parsed = z.object({ ids: z.array(z.string()).max(100) }).safeParse(await readJson(c));
+  if (!parsed.success) return c.json({ error: "Invalid order" }, 400);
+  await reorderPackages(parsed.data.ids);
+  return c.json({ ok: true });
+});
+
 admin.get("/dates", async (c) => {
   return c.json({ dates: await upcomingLocks() });
 });
 
-const dateSchema = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) });
-
 admin.post("/dates/block", async (c) => {
-  const parsed = dateSchema.safeParse(await readJson(c));
+  const parsed = blockDateSchema.safeParse(await readJson(c));
   if (!parsed.success) return c.json({ error: "Choose a valid date" }, 400);
   if (!(await blockDate(parsed.data.date))) {
     return c.json({ error: "That date is already booked, blocked or being paid for" }, 409);
@@ -163,14 +222,8 @@ admin.get("/photos", async (c) => {
 
 admin.post("/photos/sign", (c) => c.json(signUpload()));
 
-const photoSchema = z.object({
-  publicId: z.string().min(1),
-  alt: z.string().trim().max(200).default(""),
-  category: z.enum(photoCategories),
-});
-
 admin.post("/photos", async (c) => {
-  const parsed = photoSchema.safeParse(await readJson(c));
+  const parsed = photoDetailsSchema.extend({ publicId: z.string().min(1) }).safeParse(await readJson(c));
   if (!parsed.success) return c.json({ error: "Invalid photo details" }, 400);
 
   const image = await getUploadedImage(parsed.data.publicId);

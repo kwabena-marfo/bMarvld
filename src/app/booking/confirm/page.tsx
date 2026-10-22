@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import Logo from "@/components/Logo";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { confirmBooking } from "@/lib/bookings";
 import { formatCedis } from "@/data/packages";
 
@@ -83,10 +85,7 @@ function Message({ title, children }: { title: string; children: React.ReactNode
 
 function BackHome() {
   return (
-    <Link
-      href="/#book"
-      className="mt-8 inline-block bg-gold px-8 py-3 text-xs font-semibold tracking-[0.2em] text-ink uppercase transition hover:bg-cream"
-    >
+    <Link href="/#book" className={cn(buttonVariants({ size: "lg" }), "mt-8")}>
       Back to site
     </Link>
   );

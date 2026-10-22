@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { adminFetch } from "@/lib/admin-api";
+import { cn } from "@/lib/utils";
 import { formatCedis } from "@/data/packages";
 import type { BookingStatus } from "@/lib/bookings";
 
@@ -12,6 +15,7 @@ type Booking = {
   phone: string;
   packageName: string;
   price: number;
+  depositPercent?: number; // missing on bookings made before deposits were per package
   deposit: number;
   date: string;
   time: string;
@@ -22,10 +26,10 @@ type Booking = {
 };
 
 const statusStyles: Record<BookingStatus, string> = {
-  deposit_paid: "bg-gold text-ink",
-  needs_refund: "bg-red-500 text-white",
-  pending: "border border-cream/30 text-cream-dim",
-  failed: "text-cream/40",
+  deposit_paid: "",
+  needs_refund: "bg-destructive text-ink",
+  pending: "border-cream/30 bg-transparent text-cream-dim",
+  failed: "border-transparent bg-transparent text-cream/40",
 };
 
 const statusLabels: Record<BookingStatus, string> = {
@@ -53,7 +57,7 @@ export default function BookingsPage() {
       <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <h1 className="font-display text-4xl font-semibold">Bookings</h1>
         <label className="flex items-center gap-2 text-sm text-cream-dim">
-          <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} className="accent-gold" />
+          <Switch checked={showAll} onCheckedChange={setShowAll} />
           Include unpaid &amp; failed
         </label>
       </div>
@@ -86,13 +90,12 @@ export default function BookingsPage() {
                 {b.packageName} · {b.location}
               </p>
               <p className="text-cream-dim">
-                {formatCedis(b.deposit)} deposit of {formatCedis(b.price)} · {b.reference}
+                {formatCedis(b.deposit)} deposit{b.depositPercent ? ` (${b.depositPercent}%)` : ""} of{" "}
+                {formatCedis(b.price)} · {b.reference}
               </p>
             </div>
             <div>
-              <span className={`inline-block px-3 py-1 text-xs tracking-wider uppercase ${statusStyles[b.status]}`}>
-                {statusLabels[b.status]}
-              </span>
+              <Badge className={cn("tracking-wider uppercase", statusStyles[b.status])}>{statusLabels[b.status]}</Badge>
             </div>
           </div>
         ))}

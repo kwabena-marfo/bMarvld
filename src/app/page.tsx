@@ -1,13 +1,13 @@
 import Image from "next/image";
 import { Suspense } from "react";
-import BookingForm from "@/components/BookingForm";
 import GallerySection, { GallerySkeleton } from "@/components/GallerySection";
 import Logo from "@/components/Logo";
-import PickPackageButton from "@/components/PickPackageButton";
+import { BookingSection, PackagesGrid, SectionSkeleton } from "@/components/PackagesSection";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
+import { buttonVariants } from "@/components/ui/button";
 import { heroShot } from "@/data/gallery";
-import { DEPOSIT_RATE, formatCedis, packages } from "@/data/packages";
+import { cn } from "@/lib/utils";
 
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
@@ -43,16 +43,10 @@ export default function Home() {
               Studio portraits, fashion, kids and milestone moments — captured so you can be marveled, again and again.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-3">
-              <a
-                href="#book"
-                className="bg-gold px-8 py-3 text-xs font-semibold tracking-[0.2em] text-ink uppercase transition hover:bg-cream"
-              >
+              <a href="#book" className={buttonVariants({ size: "lg" })}>
                 Book a session
               </a>
-              <a
-                href="#work"
-                className="border border-cream/40 px-8 py-3 text-xs tracking-[0.2em] text-cream uppercase transition hover:border-cream"
-              >
+              <a href="#work" className={buttonVariants({ size: "lg", variant: "outline" })}>
                 View work
               </a>
             </div>
@@ -97,7 +91,7 @@ export default function Home() {
               </p>
               <a
                 href="#book"
-                className="mt-8 inline-block bg-ink px-8 py-3 text-xs font-semibold tracking-[0.2em] text-cream uppercase transition hover:bg-ink-soft"
+                className={cn(buttonVariants({ size: "lg" }), "mt-8 bg-ink text-cream hover:bg-ink-soft")}
               >
                 Let&apos;s work together
               </a>
@@ -108,31 +102,18 @@ export default function Home() {
         {/* Packages */}
         <section id="packages" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-24 sm:px-6">
           <SectionHeading eyebrow="Pricing" title="Packages" />
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {packages.map((p) => (
-              <div key={p.id} className="flex flex-col border border-cream/15 p-6 transition hover:border-cream/40">
-                <h3 className="font-display text-2xl">{p.name}</h3>
-                <p className="mt-1 text-xs tracking-[0.2em] text-cream-dim uppercase">{p.duration}</p>
-                <p className="mt-6 font-display text-3xl text-gold">{formatCedis(p.price)}</p>
-                <ul className="mt-6 flex-1 space-y-2 text-sm text-cream-dim">
-                  {p.features.map((f) => (
-                    <li key={f}>— {f}</li>
-                  ))}
-                </ul>
-                <PickPackageButton packageId={p.id} />
-              </div>
-            ))}
-          </div>
-          <p className="mt-8 text-center text-sm text-cream-dim">
-            A {DEPOSIT_RATE * 100}% deposit secures your date. The balance is paid on the day of the shoot.
-          </p>
+          <Suspense fallback={<SectionSkeleton />}>
+            <PackagesGrid />
+          </Suspense>
         </section>
 
         {/* Booking */}
         <section id="book" className="scroll-mt-16 border-t border-cream/10 bg-ink-soft/50">
           <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
             <SectionHeading eyebrow="Reserve your date" title="Book a session" />
-            <BookingForm />
+            <Suspense fallback={<SectionSkeleton height="h-[40rem]" />}>
+              <BookingSection />
+            </Suspense>
           </div>
         </section>
       </main>

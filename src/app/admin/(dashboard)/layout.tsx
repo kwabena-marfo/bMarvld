@@ -4,10 +4,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Logo from "@/components/Logo";
+import { Button } from "@/components/ui/button";
+import { Toaster } from "@/components/ui/sonner";
 import { adminFetch } from "@/lib/admin-api";
+import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/admin", label: "Bookings" },
+  { href: "/admin/packages", label: "Packages" },
   { href: "/admin/gallery", label: "Gallery" },
   { href: "/admin/dates", label: "Dates" },
 ];
@@ -37,27 +41,28 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   return (
     <div className="min-h-svh">
       <header className="border-b border-cream/10">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-4 sm:px-6">
           <Link href="/admin" className="text-lg">
             <Logo />
           </Link>
-          <nav className="flex items-center gap-4 text-xs tracking-[0.2em] uppercase sm:gap-6">
+          <nav className="flex flex-wrap items-center gap-4 text-xs tracking-[0.2em] uppercase sm:gap-6">
             {nav.map((n) => (
               <Link
                 key={n.href}
                 href={n.href}
-                className={pathname === n.href ? "text-gold" : "text-cream-dim hover:text-cream"}
+                className={cn(pathname === n.href ? "text-gold" : "text-cream-dim hover:text-cream")}
               >
                 {n.label}
               </Link>
             ))}
-            <button onClick={logout} title={`Signed in as ${email}`} className="text-cream-dim hover:text-cream">
+            <Button variant="link" size="sm" onClick={logout} title={`Signed in as ${email}`} className="px-0 text-xs tracking-[0.2em] text-cream-dim uppercase">
               Log out
-            </button>
+            </Button>
           </nav>
         </div>
       </header>
       <main className="mx-auto max-w-6xl px-4 py-10 sm:px-6">{children}</main>
+      <Toaster theme="dark" position="bottom-right" />
     </div>
   );
 }

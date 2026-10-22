@@ -1,18 +1,41 @@
 "use client";
 
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Trash2Icon, UploadIcon } from "lucide-react";
 import Image from "next/image";
-import { useCallback, useEffect, useState } from "react";
-import { adminFetch } from "@/lib/admin-api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import { toast } from "sonner";
+import type { z } from "zod";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { Field, FieldError, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { photoCategories, type Shot } from "@/data/gallery";
+import { adminFetch } from "@/lib/admin-api";
+import { sendJson } from "@/lib/forms";
+import { photoDetailsSchema } from "@/lib/schemas";
+import { cn } from "@/lib/utils";
 
 type Upload = { name: string; state: "uploading" | "done" | "error"; message?: string };
-
 type Signature = { timestamp: number; signature: string; folder: string; apiKey: string; cloudName: string };
+type Details = z.output<typeof photoDetailsSchema>;
 
 // Browser → Cloudinary directly (signed by our API), then the result is
 // registered with our API so it shows on the site.
-async function uploadOne(file: File, category: string, alt: string) {
-  const sig = await adminFetch<Signature>("/photos/sign", { method: "POST" });
+async function uploadOne(file: File, details: Details) {
+  const sig = await sendJson<Signature>("/api/admin/photos/sign");
 
   const form = new FormData();
   form.append("file", file);
@@ -28,41 +51,39 @@ async function uploadOne(file: File, category: string, alt: string) {
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message ?? "Upload failed");
 
-  await adminFetch("/photos", {
-    method: "POST",
-    body: JSON.stringify({ publicId: data.public_id, category, alt }),
-  });
+  await sendJson("/api/admin/photos", { publicId: data.public_id, ...details });
 }
 
 export default function GalleryAdmin() {
   const [photos, setPhotos] = useState<Shot[] | null>(null);
-  const [category, setCategory] = useState<string>(photoCategories[0]);
-  const [alt, setAlt] = useState("");
   const [uploads, setUploads] = useState<Upload[]>([]);
-  const [error, setError] = useState("");
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  const form = useForm<z.input<typeof photoDetailsSchema>, unknown, Details>({
+    resolver: zodResolver(photoDetailsSchema),
+    defaultValues: { category: photoCategories[0], alt: "" },
+  });
 
   const load = useCallback(() => {
     return adminFetch<{ photos: Shot[] }>("/photos")
       .then((d) => setPhotos(d.photos))
-      .catch((e) => setError(e.message));
+      .catch((e) => toast.error(e.message));
   }, []);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  async function onFiles(files: FileList | null) {
-    if (!files?.length) return;
-    const list = Array.from(files);
-    setUploads(list.map((f) => ({ name: f.name, state: "uploading" })));
+  async function upload(files: File[], details: Details) {
+    setUploads(files.map((f) => ({ name: f.name, state: "uploading" })));
 
     // A few at a time: fast, without saturating a phone connection.
-    const queue = list.map((file, i) => ({ file, i }));
+    const queue = files.map((file, i) => ({ file, i }));
     const worker = async () => {
       for (let job = queue.shift(); job; job = queue.shift()) {
         const { file, i } = job;
         try {
-          await uploadOne(file, category, alt);
+          await uploadOne(file, details);
           setUploads((u) => u.map((x, j) => (j === i ? { ...x, state: "done" } : x)));
         } catch (e) {
           const message = e instanceof Error ? e.message : "Upload failed";
@@ -75,12 +96,13 @@ export default function GalleryAdmin() {
   }
 
   async function remove(photo: Shot) {
-    if (!photo.id || !confirm("Delete this photo from the site?")) return;
+    if (!photo.id) return;
     try {
-      await adminFetch(`/photos/${photo.id}`, { method: "DELETE" });
+      await sendJson(`/api/admin/photos/${photo.id}`, undefined, "DELETE");
       setPhotos((p) => p?.filter((x) => x.id !== photo.id) ?? null);
+      toast.success("Photo deleted");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Delete failed");
+      toast.error(e instanceof Error ? e.message : "Delete failed");
     }
   }
 
@@ -90,40 +112,67 @@ export default function GalleryAdmin() {
     <>
       <h1 className="mb-8 font-display text-4xl font-semibold">Gallery</h1>
 
-      <section className="viewfinder mb-12 p-8 text-cream/40">
-        <div className="grid gap-6 text-cream md:grid-cols-[200px_1fr_auto] md:items-end">
-          <label>
-            <span className="field-label">Category</span>
-            <select value={category} onChange={(e) => setCategory(e.target.value)} className="field">
-              {photoCategories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="field-label">Description (optional)</span>
+      <form
+        onSubmit={(e) => e.preventDefault()}
+        className="viewfinder mb-12 p-8 text-cream/40"
+        noValidate
+      >
+        <div className="grid gap-6 text-cream md:grid-cols-[200px_1fr_auto] md:items-start">
+          <Controller
+            name="category"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="photo-category">Category</FieldLabel>
+                <Select value={field.value} onValueChange={(v) => field.onChange(v)}>
+                  <SelectTrigger id="photo-category" className="w-full" aria-invalid={fieldState.invalid}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {photoCategories.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FieldError errors={[fieldState.error]} />
+              </Field>
+            )}
+          />
+          <Controller
+            name="alt"
+            control={form.control}
+            render={({ field, fieldState }) => (
+              <Field data-invalid={fieldState.invalid}>
+                <FieldLabel htmlFor="photo-alt">Description (optional)</FieldLabel>
+                <Input
+                  {...field}
+                  id="photo-alt"
+                  placeholder="e.g. Ama & Kofi's wedding, Aburi"
+                  aria-invalid={fieldState.invalid}
+                />
+                <FieldError errors={[fieldState.error]} />
+              </Field>
+            )}
+          />
+          <div className="md:pt-6">
+            <Button type="button" size="lg" disabled={busy} onClick={() => fileInput.current?.click()} className="w-full">
+              <UploadIcon /> {busy ? "Uploading…" : "Choose photos"}
+            </Button>
             <input
-              value={alt}
-              onChange={(e) => setAlt(e.target.value)}
-              placeholder="e.g. Ama & Kofi's wedding, Aburi"
-              className="field"
-            />
-          </label>
-          <label
-            className={`cursor-pointer bg-gold px-8 py-3 text-center text-xs font-semibold tracking-[0.2em] text-ink uppercase transition hover:bg-cream ${busy ? "pointer-events-none opacity-50" : ""}`}
-          >
-            {busy ? "Uploading…" : "Choose photos"}
-            <input
+              ref={fileInput}
               type="file"
               accept="image/*"
               multiple
               className="hidden"
               onChange={(e) => {
-                onFiles(e.target.files);
+                const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
+                if (files.length) form.handleSubmit((details) => upload(files, details))();
               }}
             />
-          </label>
+          </div>
         </div>
 
         {uploads.length > 0 && (
@@ -131,30 +180,45 @@ export default function GalleryAdmin() {
             {uploads.map((u, i) => (
               <li key={i} className="flex justify-between gap-4 text-cream-dim">
                 <span className="truncate">{u.name}</span>
-                <span className={u.state === "error" ? "text-red-400" : u.state === "done" ? "text-gold" : ""}>
+                <span className={cn(u.state === "error" && "text-destructive", u.state === "done" && "text-gold")}>
                   {u.state === "uploading" ? "Uploading…" : u.state === "done" ? "✓ Added" : u.message}
                 </span>
               </li>
             ))}
           </ul>
         )}
-      </section>
+      </form>
 
-      {error && <p className="mb-4 text-gold">{error}</p>}
-      {!photos && !error && <p className="text-cream-dim">Loading…</p>}
+      {!photos && <p className="text-cream-dim">Loading…</p>}
       {photos?.length === 0 && (
-        <p className="text-cream-dim">No photos yet — the site is showing placeholder images until you upload some.</p>
+        <p className="text-cream-dim">No uploads yet — the site is showing the bundled portfolio until you add some.</p>
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {photos?.map((p) => (
           <div key={p.id} className="group relative aspect-square overflow-hidden bg-ink-soft">
             <Image src={p.src} alt={p.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-linear-to-t from-ink/90 p-3 text-xs">
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-linear-to-t from-ink/90 p-2 pl-3 text-xs">
               <span className="tracking-wider uppercase">{p.category}</span>
-              <button onClick={() => remove(p)} className="text-red-400 hover:text-red-300">
-                Delete
-              </button>
+              <AlertDialog>
+                <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Delete photo" />}>
+                  <Trash2Icon className="text-destructive" />
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete this photo?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      It&apos;s removed from the site and from Cloudinary. This can&apos;t be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction variant="destructive" onClick={() => remove(p)}>
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </div>
         ))}

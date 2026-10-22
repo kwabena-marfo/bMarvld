@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Logo from "./Logo";
+import { buttonVariants } from "@/components/ui/button";
 
 const links = [
   { href: "/#work", label: "Work" },
@@ -20,7 +21,7 @@ export default function SiteHeader() {
               {l.label}
             </Link>
           ))}
-          <Link href="/#book" className="bg-gold px-4 py-2 font-semibold text-ink transition hover:bg-cream">
+          <Link href="/#book" className={buttonVariants({ size: "sm" })}>
             Book
           </Link>
         </nav>

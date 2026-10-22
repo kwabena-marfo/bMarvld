@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
 
 /* Brand palette, sampled from the B.Marvld logo. */
 :root {
@@ -7,6 +11,28 @@
   --cream: #f6e3c8;
   --cream-dim: #c9b8a0;
   --gold: #ffc800;
+
+  /* The same palette mapped onto shadcn's design tokens, so shadcn/ui
+     components match the site. Square corners, like the logo's frame. */
+  --radius: 0rem;
+  --background: var(--ink);
+  --foreground: var(--cream);
+  --card: var(--ink-soft);
+  --card-foreground: var(--cream);
+  --popover: var(--ink-soft);
+  --popover-foreground: var(--cream);
+  --primary: var(--gold);
+  --primary-foreground: var(--ink);
+  --secondary: #1b1b1b;
+  --secondary-foreground: var(--cream);
+  --muted: #1b1b1b;
+  --muted-foreground: var(--cream-dim);
+  --accent: rgb(246 227 200 / 0.1);
+  --accent-foreground: var(--cream);
+  --destructive: #ff6b5e;
+  --border: rgb(246 227 200 / 0.2);
+  --input: rgb(246 227 200 / 0.2);
+  --ring: var(--gold);
 }
 
 @theme inline {
@@ -17,6 +43,31 @@
   --color-gold: var(--gold);
   --font-display: var(--font-josefin);
   --font-sans: var(--font-montserrat);
+  --font-heading: var(--font-josefin);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: var(--radius);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+  --radius-xl: var(--radius);
+  --radius-2xl: var(--radius);
 }
 
 html {
@@ -57,12 +108,4 @@ body {
   right: 0;
   border-bottom: 2px solid;
   border-right: 2px solid;
-}
-
-.field {
-  @apply w-full rounded-none border border-cream/20 bg-ink-soft px-4 py-3 text-cream placeholder:text-cream/40 outline-none transition focus:border-gold;
-}
-
-.field-label {
-  @apply mb-2 block text-xs font-medium tracking-[0.2em] text-cream-dim uppercase;
 }
