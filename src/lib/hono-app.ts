@@ -8,7 +8,7 @@ import {
   packageSchema,
   photoDetailsSchema,
 } from "./schemas";
-import { cancelPendingBooking, confirmBooking, createBooking, listBookings } from "./bookings";
+import { abandonBooking, cancelPendingBooking, confirmBooking, createBooking, listBookings } from "./bookings";
 import { blockDate, unavailableDates, unblockDate, upcomingLocks } from "./dateLocks";
 import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } from "./paystack";
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
@@ -98,7 +98,14 @@ app.post("/bookings", async (c) => {
         date: booking.date,
       },
     });
-    return c.json({ ok: true, reference: booking.reference, authorizationUrl: checkout.authorization_url });
+    // The form opens the checkout in Paystack's modal with the access code; the
+    // hosted page at authorizationUrl is its fallback if the modal can't load.
+    return c.json({
+      ok: true,
+      reference: booking.reference,
+      accessCode: checkout.access_code,
+      authorizationUrl: checkout.authorization_url,
+    });
   } catch (err) {
     await cancelPendingBooking(booking);
     return c.json({ error: paystackErrorMessage(err, "Could not start payment") }, 502);
@@ -107,6 +114,14 @@ app.post("/bookings", async (c) => {
 
 app.get("/bookings/:reference/verify", async (c) => {
   const booking = await confirmBooking(c.req.param("reference"));
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+  return c.json({ reference: booking.reference, status: booking.status });
+});
+
+// The customer closed the Paystack modal: frees the date unless a payment is
+// still going through.
+app.post("/bookings/:reference/cancel", async (c) => {
+  const booking = await abandonBooking(c.req.param("reference"));
   if (!booking) return c.json({ error: "Booking not found" }, 404);
   return c.json({ reference: booking.reference, status: booking.status });
 });

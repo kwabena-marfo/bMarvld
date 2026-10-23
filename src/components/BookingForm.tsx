@@ -1,7 +1,9 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useCallback, useEffect, useState } from "react";
+import type PaystackPop from "@paystack/inline-js";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import DatePicker from "./DatePicker";
@@ -17,11 +19,32 @@ import { cn } from "@/lib/utils";
 
 type FormInput = z.input<typeof bookingSchema>;
 type FormOutput = z.output<typeof bookingSchema>;
+type Checkout = { reference: string; accessCode: string; authorizationUrl: string };
+
+// If the modal hasn't appeared by then, send the customer to Paystack's hosted page instead.
+const CHECKOUT_LOAD_TIMEOUT_MS = 15_000;
+
+// One Paystack popup for the page. Creating it loads Paystack's checkout into a
+// hidden iframe, so doing that before the click lets the modal open straight
+// away rather than flashing a loader first.
+let paystackPopup: Promise<PaystackPop> | undefined;
+function loadPaystack() {
+  paystackPopup ??= import("@paystack/inline-js")
+    .then(({ default: Popup }) => new Popup())
+    .catch((err) => {
+      paystackPopup = undefined;
+      throw err;
+    });
+  return paystackPopup;
+}
 
 export default function BookingForm({ packages }: { packages: Package[] }) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   // null until loaded, which also keeps the calendar out of the server render.
   const [unavailable, setUnavailable] = useState<Set<string> | null>(null);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState(false);
 
   const form = useForm<FormInput, unknown, FormOutput>({
     resolver: zodResolver(bookingSchema),
@@ -48,6 +71,23 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
     loadAvailability();
   }, [loadAvailability]);
 
+  // Warm up Paystack once the form is close to the screen, so visitors who
+  // never scroll down to book don't load it.
+  useEffect(() => {
+    const form = formRef.current;
+    if (!form) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        loadPaystack().catch(() => {}); // retried on submit
+      },
+      { rootMargin: "800px 0px" }
+    );
+    observer.observe(form);
+    return () => observer.disconnect();
+  }, []);
+
   // Lets the "Book this" buttons in the Packages section preselect a package.
   const { setValue } = form;
   useEffect(() => {
@@ -62,9 +102,9 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
 
   async function onSubmit(values: FormOutput) {
     setError("");
+    let checkout: Checkout;
     try {
-      const data = await sendJson<{ authorizationUrl: string }>("/api/bookings", values);
-      window.location.assign(data.authorizationUrl); // off to Paystack checkout
+      checkout = await sendJson<Checkout>("/api/bookings", values);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
         // Someone else got the date (or the package changed) — refresh the calendar.
@@ -72,7 +112,49 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
       }
       applyFieldErrors(form.setError, err);
       setError(err instanceof Error ? err.message : "Network error. Check your connection and try again.");
+      return;
     }
+
+    let popup: PaystackPop;
+    try {
+      popup = await loadPaystack();
+    } catch {
+      window.location.assign(checkout.authorizationUrl); // Paystack's script was blocked
+      return;
+    }
+
+    // Resolves once the modal is showing (or closed), so the button stays in its
+    // loading state until then.
+    await new Promise<void>((resolve) => {
+      const fallback = () => window.location.assign(checkout.authorizationUrl);
+      const timer = setTimeout(() => {
+        popup.cancelTransaction(); // closes the active transaction
+        fallback();
+      }, CHECKOUT_LOAD_TIMEOUT_MS);
+      popup.resumeTransaction(checkout.accessCode, {
+        onLoad: () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        onError: () => {
+          clearTimeout(timer);
+          fallback();
+        },
+        onSuccess: ({ reference }) => {
+          setConfirming(true);
+          router.push(`/booking/confirm?reference=${encodeURIComponent(reference)}`);
+        },
+        onCancel: async () => {
+          clearTimeout(timer);
+          // Free the held date before the customer can try again, or their own
+          // hold would block it.
+          await sendJson(`/api/bookings/${encodeURIComponent(checkout.reference)}/cancel`).catch(() => {});
+          loadAvailability();
+          setError("Payment cancelled — your date isn't reserved yet. You can try again whenever you're ready.");
+          resolve();
+        },
+      });
+    });
   }
 
   if (!packages.length) {
@@ -86,7 +168,7 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
   const { isSubmitting } = form.formState;
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="grid gap-10 lg:grid-cols-[1fr_340px]" noValidate>
+    <form ref={formRef} onSubmit={form.handleSubmit(onSubmit)} className="grid gap-10 lg:grid-cols-[1fr_340px]" noValidate>
       <FieldGroup className="gap-6">
         <Controller
           name="packageId"
@@ -267,8 +349,12 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
 
             {error && <p className="mt-6 border border-destructive/50 p-3 text-sm text-destructive">{error}</p>}
 
-            <Button type="submit" size="lg" disabled={isSubmitting} className="mt-6 w-full">
-              {isSubmitting ? "Redirecting to payment…" : `Pay ${formatCedis(depositFor(pkg))} deposit`}
+            <Button type="submit" size="lg" disabled={isSubmitting || confirming} className="mt-6 w-full">
+              {confirming
+                ? "Confirming your booking…"
+                : isSubmitting
+                  ? "Opening secure checkout…"
+                  : `Pay ${formatCedis(depositFor(pkg))} deposit`}
             </Button>
             <p className="mt-3 text-center text-xs text-cream-dim">Secure payment by Paystack · Card or Mobile Money</p>
           </div>

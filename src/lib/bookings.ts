@@ -115,6 +115,24 @@ export async function confirmBooking(reference: string) {
   return booking;
 }
 
+// Called when the customer closes the checkout modal. Only releases the date
+// once Paystack says nothing was paid: a Mobile Money prompt can still be
+// awaiting approval, and then the hold stays until the webhook confirms it or
+// the hold expires.
+export async function abandonBooking(reference: string) {
+  const collection = await bookingsCollection();
+  const booking = await collection.findOne({ reference });
+  if (!booking || booking.status !== "pending") return booking;
+
+  const tx = await verifyTransaction(reference);
+  if (tx.status === "success") return confirmBooking(reference);
+  if (tx.status === "abandoned" || tx.status === "failed") {
+    await cancelPendingBooking(booking);
+    return collection.findOne({ reference });
+  }
+  return booking;
+}
+
 export async function listBookings() {
   const collection = await bookingsCollection();
   return collection.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(500).toArray();

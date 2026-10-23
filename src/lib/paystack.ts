@@ -29,7 +29,7 @@ export async function verifyTransaction(reference: string) {
   const res = await paystack.get(`/transaction/verify/${encodeURIComponent(reference)}`);
 
   return res.data?.data as {
-    status: "success" | "failed" | "abandoned";
+    status: "success" | "failed" | "abandoned" | "ongoing" | "pending" | "processing" | "queued" | "reversed";
     reference: string;
     amount: number; // pesewas
     currency: string;
