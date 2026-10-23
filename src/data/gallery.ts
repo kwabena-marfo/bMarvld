@@ -65,6 +65,6 @@ export const portfolio: Shot[] = [
 export const heroLeft = portfolio.find((s) => s.src.endsWith("bm-10.jpg"))!; // man in cream suit walking side-on with briefcase
 export const heroRight = portfolio.find((s) => s.src.endsWith("bm-13.jpg"))!; // woman in olive dress, arms raised
 
-// Blurred behind the booking form: the studio set with curtains, pendant lamp and plants.
+// Blurred behind the booking form: the studio set with white drapes and glowing cream arches.
 // Swap for a photo of the empty studio when there is one.
-export const studioBackdrop = portfolio.find((s) => s.src.endsWith("bm-03.jpg"))!;
+export const studioBackdrop = portfolio.find((s) => s.src.endsWith("bm-07.jpg"))!;

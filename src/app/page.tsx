@@ -156,7 +156,7 @@ export default function Home() {
             alt=""
             fill
             sizes="100vw"
-            className="-z-10 object-cover object-[center_35%] opacity-30 blur-[3px] in-[.light]:opacity-25"
+            className="-z-10 object-cover object-[center_30%] opacity-30 blur-[3px] in-[.light]:opacity-25"
           />
           <div className="absolute inset-0 -z-10 bg-linear-to-b from-ink/60 via-transparent to-ink/70" />
           <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
