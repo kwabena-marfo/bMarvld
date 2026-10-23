@@ -49,7 +49,7 @@ export default function Gallery({ shots }: { shots: Shot[] }) {
         ))}
       </div>
 
-      <div className="columns-1 gap-4 sm:columns-2 lg:columns-3">
+      <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
         {shown.map((shot, i) => (
           <button
             key={shot.id ?? shot.src}
@@ -61,7 +61,7 @@ export default function Gallery({ shots }: { shots: Shot[] }) {
               alt={shot.alt}
               width={shot.width}
               height={shot.height}
-              sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+              sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
               className="h-auto w-full transition duration-700 group-hover:scale-105"
             />
             <span className="absolute inset-0 flex items-end bg-linear-to-t from-ink/80 via-transparent p-4 opacity-0 transition group-hover:opacity-100">

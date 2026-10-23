@@ -27,7 +27,7 @@ type Booking = {
 
 const statusStyles: Record<BookingStatus, string> = {
   deposit_paid: "",
-  needs_refund: "bg-destructive text-ink",
+  needs_refund: "bg-destructive text-primary-foreground",
   pending: "border-cream/30 bg-transparent text-cream-dim",
   failed: "border-transparent bg-transparent text-cream/40",
 };

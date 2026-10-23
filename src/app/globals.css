@@ -22,7 +22,7 @@
   --popover: var(--ink-soft);
   --popover-foreground: var(--cream);
   --primary: var(--gold);
-  --primary-foreground: var(--ink);
+  --primary-foreground: #050505; /* always dark: text on gold, in both themes */
   --secondary: #1b1b1b;
   --secondary-foreground: var(--cream);
   --muted: #1b1b1b;
@@ -33,6 +33,25 @@
   --border: rgb(246 227 200 / 0.2);
   --input: rgb(246 227 200 / 0.2);
   --ring: var(--gold);
+}
+
+/* Light theme (toggle at the bottom of the page): the cream of the light logo
+   becomes the page and ink becomes the text. Swapping the two brand colours
+   flips every ink/cream utility at once; the gold deepens so it stays legible
+   on cream. The deliberately inverted About section stays the opposite of the page. */
+:root.light {
+  --ink: #f6e3c8;
+  --ink-soft: #efd8b5;
+  --cream: #0a0a0a;
+  --cream-dim: #5b5045;
+  --gold: #c08a00;
+
+  --secondary: #ead1ab;
+  --muted: #ead1ab;
+  --accent: rgb(10 10 10 / 0.06);
+  --destructive: #c0392b;
+  --border: rgb(10 10 10 / 0.18);
+  --input: rgb(10 10 10 / 0.18);
 }
 
 @theme inline {

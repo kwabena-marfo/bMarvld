@@ -61,4 +61,10 @@ export const portfolio: Shot[] = [
   shot("35", "Kids", "Girl lounging playfully on a pink set", 2133),
 ];
 
-export const heroShot = portfolio.find((s) => s.src.endsWith("bm-18.jpg"))!;
+// The hero pairs two portraits either side of the logo.
+export const heroLeft = portfolio.find((s) => s.src.endsWith("bm-10.jpg"))!; // man in cream suit walking side-on with briefcase
+export const heroRight = portfolio.find((s) => s.src.endsWith("bm-13.jpg"))!; // woman in olive dress, arms raised
+
+// Blurred behind the booking form: the studio set with curtains, pendant lamp and plants.
+// Swap for a photo of the empty studio when there is one.
+export const studioBackdrop = portfolio.find((s) => s.src.endsWith("bm-03.jpg"))!;

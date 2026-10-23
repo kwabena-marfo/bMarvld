@@ -4,7 +4,7 @@ import { createMiddleware } from "hono/factory";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { sign, verify } from "hono/jwt";
 import { getDb } from "./mongodb";
-import { sendLoginCodeEmail } from "./mailer";
+import { adminEmails, sendLoginCodeEmail } from "./mailer";
 
 // Admins sign in with a 6-digit code emailed to one of the addresses in
 // ADMIN_EMAILS, then hold a signed, HTTP-only session cookie.
@@ -29,11 +29,7 @@ function secret() {
 }
 
 export function isAdminEmail(email: string) {
-  const admins = (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean);
-  return admins.includes(email);
+  return adminEmails().includes(email);
 }
 
 // Keyed with the session secret, so a database leak doesn't expose live codes.

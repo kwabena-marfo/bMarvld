@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Josefin_Sans, Montserrat } from "next/font/google";
+import ThemeToggle, { ThemeProvider } from "@/components/ThemeToggle";
 import "./globals.css";
 
 // Josefin Sans echoes the geometric, high-waisted letterforms of the logo;
@@ -34,8 +35,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${josefin.variable} ${montserrat.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col font-sans">{children}</body>
+    // next-themes sets the theme class on <html> before hydration, hence the warning suppression.
+    <html lang="en" suppressHydrationWarning className={`${josefin.variable} ${montserrat.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col font-sans">
+        <ThemeProvider>
+          {children}
+          <ThemeToggle />
+        </ThemeProvider>
+      </body>
     </html>
   );
 }

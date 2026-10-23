@@ -37,6 +37,13 @@ async function trySend(recipients: (string | undefined)[], message: string) {
   }
 }
 
+// Everyone alerted about bookings, as a comma-separated list like ADMIN_EMAILS.
+const adminPhones = () =>
+  (process.env.ADMIN_PHONES ?? "")
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
 const firstName = (b: Booking) => b.name.split(" ")[0];
 
 export async function notifyBookingConfirmed(b: Booking) {
@@ -48,7 +55,7 @@ export async function notifyBookingConfirmed(b: Booking) {
         `Ref: ${b.reference}. ...be marveled`
     ),
     trySend(
-      [process.env.ADMIN_PHONE],
+      adminPhones(),
       `New booking: ${b.name} (${b.phone}) - ${b.packageName}, ${b.date} ${b.time} at ${b.location}. ` +
         `Deposit ${formatCedis(b.deposit)} paid. Ref ${b.reference}`
     ),
@@ -63,7 +70,7 @@ export async function notifyBookingClash(b: Booking) {
         `was just taken. B.Marvld will call you shortly to reschedule or refund.`
     ),
     trySend(
-      [process.env.ADMIN_PHONE],
+      adminPhones(),
       `ACTION NEEDED: ${b.name} (${b.phone}) paid ${formatCedis(b.deposit)} for ${b.date}, but that date is already ` +
         `taken. Reschedule or refund. Ref ${b.reference}`
     ),

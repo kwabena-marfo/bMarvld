@@ -73,7 +73,7 @@ export default function TimePicker({
                   className={cn(
                     "border py-2 text-xs transition",
                     time === value
-                      ? "border-gold bg-gold font-semibold text-ink"
+                      ? "border-gold bg-gold font-semibold text-primary-foreground"
                       : "border-cream/15 text-cream hover:border-cream/50"
                   )}
                 >

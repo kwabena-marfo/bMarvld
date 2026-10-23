@@ -1,12 +1,13 @@
 import Image from "next/image";
 import { Suspense } from "react";
+import { Aperture, Bokeh, Camera, CameraTripod, Softbox } from "@/components/Backdrops";
 import GallerySection, { GallerySkeleton } from "@/components/GallerySection";
 import Logo from "@/components/Logo";
 import { BookingSection, PackagesGrid, SectionSkeleton } from "@/components/PackagesSection";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import { buttonVariants } from "@/components/ui/button";
-import { heroShot } from "@/data/gallery";
+import { heroLeft, heroRight, studioBackdrop } from "@/data/gallery";
 import { cn } from "@/lib/utils";
 
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
@@ -25,36 +26,65 @@ export default function Home() {
       <main className="flex-1">
         {/* Hero */}
         <section className="relative flex min-h-svh items-center justify-center overflow-hidden px-4">
-          <Image
-            src={heroShot.src}
-            alt=""
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover object-[center_30%] opacity-50"
-          />
-          <div className="absolute inset-0 bg-linear-to-b from-ink/60 via-ink/30 to-ink" />
-          <div className="viewfinder relative px-8 py-14 text-center text-cream/80 sm:px-16">
-            <span className="absolute top-6 right-6 h-3 w-3 rounded-full bg-gold" aria-hidden />
-            <h1 className="text-cream">
-              <Logo tagline className="text-5xl sm:text-7xl md:text-8xl" />
-            </h1>
-            <p className="mx-auto mt-8 max-w-md text-sm text-cream-dim">
-              Studio portraits, fashion, kids and milestone moments — captured so you can be marveled, again and again.
-            </p>
-            <div className="mt-10 flex flex-wrap justify-center gap-3">
-              <a href="#book" className={buttonVariants({ size: "lg" })}>
-                Book a session
-              </a>
-              <a href="#work" className={buttonVariants({ size: "lg", variant: "outline" })}>
-                View work
-              </a>
+          {/* Two portraits either side, each fading out toward the centre so the
+              logo sits on clear black between them. */}
+          <div className="absolute inset-y-0 left-0 w-1/2 mask-[linear-gradient(to_right,black_35%,transparent)] md:w-[46%]">
+            <Image
+              src={heroLeft.src}
+              alt=""
+              fill
+              priority
+              sizes="(min-width: 768px) 46vw, 50vw"
+              className="object-cover object-[center_15%]"
+            />
+          </div>
+          {/* On phones her face would land in the fade, so the crop shifts her toward the
+              solid outer edge and the solid band is wider. */}
+          <div className="absolute inset-y-0 right-0 w-1/2 mask-[linear-gradient(to_left,black_50%,transparent)] md:w-[46%] md:mask-[linear-gradient(to_left,black_35%,transparent)]">
+            <Image
+              src={heroRight.src}
+              alt=""
+              fill
+              priority
+              sizes="(min-width: 768px) 46vw, 50vw"
+              className="object-cover object-[35%_25%] md:object-[center_25%]"
+            />
+          </div>
+          {/* Brand-coloured tint: warm gold at the outer edges deepening to black in the
+              middle behind the logo, then a fade into the next section. */}
+          <div className="absolute inset-0 bg-linear-to-r from-gold/25 via-ink/75 to-gold/25" />
+          <div className="absolute inset-0 bg-linear-to-b from-ink/30 via-transparent to-ink" />
+          <Bokeh className="opacity-70" />
+          <div className="relative flex flex-col items-center pt-16 text-center">
+            {/* A slowly turning lens aperture above the framed logo. It's sized from the
+                screen height so the frame below it still fits. */}
+            <Aperture className="size-[min(70vw,36svh,28rem)] animate-[spin_120s_linear_infinite] text-gold opacity-20 motion-reduce:animate-none" />
+            <div className="viewfinder relative mt-6 px-8 py-8 text-cream/80 sm:px-14 sm:py-10">
+              <span className="absolute top-5 right-5 size-2.5 rounded-full bg-gold" aria-hidden />
+              <h1 className="text-cream">
+                <Logo tagline className="text-3xl sm:text-5xl md:text-6xl" />
+              </h1>
+              <p className="mx-auto mt-5 max-w-md text-sm text-cream-dim">
+                Studio portraits, fashion, kids and milestone moments — captured so you can be marveled, again and again.
+              </p>
+              <div className="mt-7 flex flex-wrap justify-center gap-3">
+                <a href="#book" className={buttonVariants({ size: "lg" })}>
+                  Book a session
+                </a>
+                <a href="#work" className={buttonVariants({ size: "lg", variant: "outline" })}>
+                  View work
+                </a>
+              </div>
             </div>
           </div>
         </section>
 
         {/* Work */}
-        <section id="work" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-24 sm:px-6">
+        <section id="work" className="relative isolate mx-auto max-w-384 scroll-mt-16 px-4 py-24 sm:px-6 lg:px-10">
+          {/* The full logo as a faint watermark behind the heading. */}
+          <div aria-hidden className="pointer-events-none absolute inset-x-0 top-10 -z-10 flex justify-center opacity-[0.06] blur-[1px]">
+            <Logo mark className="text-[11vw] 2xl:text-[10rem]" />
+          </div>
           <SectionHeading eyebrow="Portfolio" title="Selected work" />
           <Suspense fallback={<GallerySkeleton />}>
             <GallerySection />
@@ -62,7 +92,9 @@ export default function Home() {
         </section>
 
         {/* About */}
-        <section id="about" className="scroll-mt-16 bg-cream text-ink">
+        <section id="about" className="relative isolate scroll-mt-16 overflow-hidden bg-cream text-ink">
+          <Camera className="absolute -right-16 -bottom-10 -z-10 w-104 -rotate-12 opacity-[0.08] blur-[0.5px] md:w-136" />
+          <Aperture className="absolute -top-24 -left-24 -z-10 size-80 opacity-[0.07]" />
           <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-24 sm:px-6 md:grid-cols-2">
             <div className="viewfinder relative mx-auto aspect-3/4 w-full max-w-md p-4">
               <div className="relative h-full w-full">
@@ -100,20 +132,40 @@ export default function Home() {
         </section>
 
         {/* Packages */}
-        <section id="packages" className="mx-auto max-w-6xl scroll-mt-16 px-4 py-24 sm:px-6">
-          <SectionHeading eyebrow="Pricing" title="Packages" />
-          <Suspense fallback={<SectionSkeleton />}>
-            <PackagesGrid />
-          </Suspense>
+        <section id="packages" className="relative isolate scroll-mt-16 overflow-hidden">
+          {/* Studio lights either side; the package cards sit on a blurred panel over them. */}
+          <Softbox className="absolute bottom-0 -left-10 -z-10 h-88 text-cream opacity-[0.12] blur-[1px] md:left-4 md:h-120" />
+          <CameraTripod className="absolute -right-10 bottom-0 -z-10 h-88 text-cream opacity-[0.12] blur-[1px] md:right-4 md:h-120" />
+          <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
+            <SectionHeading eyebrow="Pricing" title="Packages" />
+            <Suspense fallback={<SectionSkeleton />}>
+              <PackagesGrid />
+            </Suspense>
+          </div>
         </section>
 
         {/* Booking */}
-        <section id="book" className="scroll-mt-16 border-t border-cream/10 bg-ink-soft/50">
+        <section
+          id="book"
+          className="relative isolate scroll-mt-16 overflow-hidden border-t border-cream/10 bg-ink-soft/50 in-[.light]:bg-[#e6c99e]"
+        >
+          {/* A studio set, softly out of focus. The form sits on its own solid panel,
+              so the photo only shows around and faintly through it. */}
+          <Image
+            src={studioBackdrop.src}
+            alt=""
+            fill
+            sizes="100vw"
+            className="-z-10 object-cover object-[center_35%] opacity-30 blur-[3px] in-[.light]:opacity-25"
+          />
+          <div className="absolute inset-0 -z-10 bg-linear-to-b from-ink/60 via-transparent to-ink/70" />
           <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
             <SectionHeading eyebrow="Reserve your date" title="Book a session" />
-            <Suspense fallback={<SectionSkeleton height="h-[40rem]" />}>
-              <BookingSection />
-            </Suspense>
+            <div className="border border-cream/10 bg-ink/85 p-5 shadow-2xl shadow-black/30 backdrop-blur-md sm:p-10">
+              <Suspense fallback={<SectionSkeleton height="h-[40rem]" />}>
+                <BookingSection />
+              </Suspense>
+            </div>
           </div>
         </section>
       </main>

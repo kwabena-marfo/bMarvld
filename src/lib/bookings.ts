@@ -3,6 +3,7 @@ import { getDb } from "./mongodb";
 import { verifyTransaction } from "./paystack";
 import { bookDate, holdDate, releaseHold } from "./dateLocks";
 import { notifyBookingClash, notifyBookingConfirmed } from "./sms";
+import { emailBookingClash, emailBookingConfirmed } from "./mailer";
 import { findActivePackage } from "./packages";
 import { depositFor } from "@/data/packages";
 import type { BookingInput } from "./schemas";
@@ -98,7 +99,11 @@ export async function confirmBooking(reference: string) {
       { returnDocument: "after" }
     );
     if (!updated) return collection.findOne({ reference }); // another call got here first
-    await (gotDate ? notifyBookingConfirmed(updated) : notifyBookingClash(updated));
+    await Promise.all(
+      gotDate
+        ? [notifyBookingConfirmed(updated), emailBookingConfirmed(updated)]
+        : [notifyBookingClash(updated), emailBookingClash(updated)]
+    );
     return updated;
   }
 
