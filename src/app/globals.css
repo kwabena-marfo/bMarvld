@@ -128,3 +128,73 @@ body {
   border-bottom: 2px solid;
   border-right: 2px solid;
 }
+
+/* LogoLoader: the logo's four viewfinder corners close in and open out like a
+   lens finding focus, while its gold dot blinks. */
+.logo-loader {
+  position: relative;
+  display: inline-block;
+  aspect-ratio: 1;
+}
+.logo-loader > i {
+  position: absolute;
+  width: 28%;
+  height: 28%;
+  border: 0 solid currentColor;
+  animation: logo-focus 1.4s ease-in-out infinite;
+}
+.logo-loader > i:nth-child(1) {
+  top: 0;
+  left: 0;
+  border-width: 2px 0 0 2px;
+  --dx: 1;
+  --dy: 1;
+}
+.logo-loader > i:nth-child(2) {
+  top: 0;
+  right: 0;
+  border-width: 2px 2px 0 0;
+  --dx: -1;
+  --dy: 1;
+}
+.logo-loader > i:nth-child(3) {
+  bottom: 0;
+  left: 0;
+  border-width: 0 0 2px 2px;
+  --dx: 1;
+  --dy: -1;
+}
+.logo-loader > i:nth-child(4) {
+  bottom: 0;
+  right: 0;
+  border-width: 0 2px 2px 0;
+  --dx: -1;
+  --dy: -1;
+}
+.logo-loader > b {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16%;
+  height: 16%;
+  border-radius: 9999px;
+  background: var(--gold);
+  translate: -50% -50%;
+  animation: logo-blink 1.4s ease-in-out infinite;
+}
+@keyframes logo-focus {
+  50% {
+    translate: calc(var(--dx) * 40%) calc(var(--dy) * 40%);
+  }
+}
+@keyframes logo-blink {
+  50% {
+    opacity: 0.25;
+    scale: 0.7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .logo-loader > i {
+    animation: none;
+  }
+}
