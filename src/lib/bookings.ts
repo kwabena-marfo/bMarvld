@@ -1,5 +1,7 @@
 import crypto from "crypto";
+import type { Filter } from "mongodb";
 import { getDb } from "./mongodb";
+import { searchFilter, type PageParams } from "./listQuery";
 import { verifyTransaction } from "./paystack";
 import { bookDate, holdDate, releaseHold } from "./dateLocks";
 import { notifyBookingClash, notifyBookingConfirmed } from "./sms";
@@ -133,7 +135,23 @@ export async function abandonBooking(reference: string) {
   return booking;
 }
 
-export async function listBookings() {
+const searchableFields = ["name", "phone", "email", "reference", "packageName", "date", "location", "notes"];
+
+/** Newest first. Unless `includeUnpaid`, only bookings that took a deposit. */
+export async function listBookings({ q, includeUnpaid, page }: { q?: string; includeUnpaid: boolean; page: PageParams }) {
   const collection = await bookingsCollection();
-  return collection.find({}, { projection: { _id: 0 } }).sort({ createdAt: -1 }).limit(500).toArray();
+  const filter: Filter<Booking> = {
+    ...(includeUnpaid ? {} : { status: { $in: ["deposit_paid", "needs_refund"] } }),
+    ...searchFilter(q, searchableFields),
+  };
+  const [bookings, total] = await Promise.all([
+    collection
+      .find(filter, { projection: { _id: 0 } })
+      .sort({ createdAt: -1 })
+      .skip(page.skip)
+      .limit(page.pageSize)
+      .toArray(),
+    collection.countDocuments(filter),
+  ]);
+  return { bookings, total, pageSize: page.pageSize };
 }

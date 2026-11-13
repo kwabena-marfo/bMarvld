@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { z } from "zod";
+import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -13,9 +14,11 @@ import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { adminFetch } from "@/lib/admin-api";
 import { applyFieldErrors, sendJson } from "@/lib/forms";
+import { matchesSearch, paginate } from "@/lib/listQuery";
 import { blockDateSchema } from "@/lib/schemas";
 
 type Lock = { _id: string; kind: "booked" | "blocked"; reference: string };
+const pageSize = 20;
 type Values = z.output<typeof blockDateSchema>;
 
 const iso = (d: Date) =>
@@ -72,6 +75,11 @@ export default function DatesAdmin() {
   }
 
   const taken = new Set(locks?.map((l) => l._id));
+  const list = useListParams();
+  const found = locks?.filter((l) =>
+    matchesSearch(list.q, pretty(l._id), l._id, l.kind === "booked" ? `booked ${l.reference}` : "blocked"),
+  );
+  const shown = found && paginate(found, list.page, pageSize);
 
   return (
     <>
@@ -122,11 +130,15 @@ export default function DatesAdmin() {
         </Button>
       </form>
 
-      {!locks && <p className="text-cream-dim">Loading…</p>}
-      {locks?.length === 0 && <p className="text-cream-dim">No upcoming booked or blocked dates.</p>}
+      <ListSearch value={list.q} onSearch={list.setQuery} placeholder="Search month, day, reference…" className="mb-6 sm:max-w-xl" />
 
-      <ul className="max-w-xl divide-y divide-cream/10 border-y border-cream/10">
-        {locks?.map((l) => (
+      {!locks && <p className="text-cream-dim">Loading…</p>}
+      {found?.length === 0 && (
+        <EmptyList q={list.q} empty="No upcoming booked or blocked dates." noun="dates" />
+      )}
+
+      <ul className="max-w-xl divide-y divide-cream/10 border-y border-cream/10 empty:border-0">
+        {shown?.items.map((l) => (
           <li key={l._id} className="flex items-center justify-between gap-4 py-3">
             <span>{pretty(l._id)}</span>
             {l.kind === "booked" ? (
@@ -142,6 +154,18 @@ export default function DatesAdmin() {
           </li>
         ))}
       </ul>
+
+      {found && (
+        <div className="max-w-xl">
+          <ListPagination
+            page={list.page}
+            pageSize={pageSize}
+            total={found.length}
+            noun={["date", "dates"]}
+            onPage={list.setPage}
+          />
+        </div>
+      )}
     </>
   );
 }

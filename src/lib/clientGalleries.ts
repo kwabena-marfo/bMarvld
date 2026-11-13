@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { ObjectId } from "mongodb";
 import { getDb } from "./mongodb";
+import { searchFilter, type PageParams } from "./listQuery";
 import {
   clientsFolder,
   deletePrivateFolder,
@@ -70,9 +71,14 @@ function oid(id: string) {
 
 // ------------------------------------------------------------- admin side ----
 
-export async function listGalleries() {
-  const docs = await (await galleries()).find().sort({ createdAt: -1 }).limit(300).toArray();
-  return docs.map((g) => ({
+export async function listGalleries({ q, page }: { q?: string; page: PageParams }) {
+  const collection = await galleries();
+  const filter = searchFilter(q, ["clientName", "title", "clientPhone", "clientEmail", "bookingReference"]);
+  const [docs, total] = await Promise.all([
+    collection.find(filter).sort({ createdAt: -1 }).skip(page.skip).limit(page.pageSize).toArray(),
+    collection.countDocuments(filter),
+  ]);
+  const list = docs.map((g) => ({
     id: g._id.toString(),
     clientName: g.clientName,
     title: g.title,
@@ -82,6 +88,7 @@ export async function listGalleries() {
     finals: g.finals.length,
     createdAt: g.createdAt,
   }));
+  return { galleries: list, total, pageSize: page.pageSize };
 }
 
 export async function createGallery(input: ClientGalleryInput) {

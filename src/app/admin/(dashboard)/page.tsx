@@ -1,9 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { EmptyList, ListPagination, ListSearch, useAdminList, useListParams } from "@/components/AdminList";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { adminFetch } from "@/lib/admin-api";
 import { cn } from "@/lib/utils";
 import { formatCedis } from "@/data/packages";
 import type { BookingStatus } from "@/lib/bookings";
@@ -39,35 +38,40 @@ const statusLabels: Record<BookingStatus, string> = {
   failed: "Failed",
 };
 
+type BookingList = { bookings: Booking[]; total: number; pageSize: number };
+
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<Booking[] | null>(null);
-  const [showAll, setShowAll] = useState(false);
-  const [error, setError] = useState("");
+  const list = useListParams();
+  const { q, page } = list;
+  const showAll = list.get("all") === "1";
+  const query = new URLSearchParams({ q, page: String(page), ...(showAll && { all: "1" }) }).toString();
+  const { data, error, loading } = useAdminList<BookingList>(`/bookings?${query}`);
 
-  useEffect(() => {
-    adminFetch<{ bookings: Booking[] }>("/bookings")
-      .then((d) => setBookings(d.bookings))
-      .catch((e) => setError(e.message));
-  }, []);
-
-  const visible = bookings?.filter((b) => showAll || b.status === "deposit_paid" || b.status === "needs_refund");
+  const bookings = data?.bookings;
 
   return (
     <>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <h1 className="font-display text-4xl font-semibold">Bookings</h1>
         <label className="flex items-center gap-2 text-sm text-cream-dim">
-          <Switch checked={showAll} onCheckedChange={setShowAll} />
+          <Switch checked={showAll} onCheckedChange={(on) => list.set({ all: on ? "1" : null })} />
           Include unpaid &amp; failed
         </label>
       </div>
 
-      {error && <p className="text-gold">{error}</p>}
-      {!bookings && !error && <p className="text-cream-dim">Loading…</p>}
-      {visible?.length === 0 && <p className="text-cream-dim">No bookings yet.</p>}
+      <ListSearch
+        value={q}
+        onSearch={list.setQuery}
+        placeholder="Search name, phone, reference…"
+        className="mb-6"
+      />
 
-      <div className="grid gap-3">
-        {visible?.map((b) => (
+      {error && <p className="text-gold">{error}</p>}
+      {!data && !error && <p className="text-cream-dim">Loading…</p>}
+      {bookings?.length === 0 && !loading && <EmptyList q={q} empty="No bookings yet." noun="bookings" />}
+
+      <div className={cn("grid gap-3 transition-opacity", loading && data && "opacity-50")}>
+        {bookings?.map((b) => (
           <div key={b.reference} className="grid gap-4 border border-cream/15 p-5 md:grid-cols-[1fr_1fr_auto]">
             <div>
               <p className="font-display text-xl">{b.name}</p>
@@ -100,6 +104,16 @@ export default function BookingsPage() {
           </div>
         ))}
       </div>
+
+      {data && (
+        <ListPagination
+          page={page}
+          pageSize={data.pageSize}
+          total={data.total}
+          noun={["booking", "bookings"]}
+          onPage={list.setPage}
+        />
+      )}
     </>
   );
 }

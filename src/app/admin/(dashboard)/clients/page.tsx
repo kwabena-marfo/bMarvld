@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { z } from "zod";
+import { EmptyList, ListPagination, ListSearch, useAdminList, useListParams } from "@/components/AdminList";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,6 +20,7 @@ import { adminFetch } from "@/lib/admin-api";
 import { formatDate } from "@/lib/formatDate";
 import { applyFieldErrors, sendJson } from "@/lib/forms";
 import { clientGallerySchema } from "@/lib/schemas";
+import { cn } from "@/lib/utils";
 
 type GallerySummary = {
   id: string;
@@ -32,19 +34,18 @@ type GallerySummary = {
 
 type PaidBooking = { reference: string; name: string; phone: string; email: string; packageName: string; date: string; status: string };
 
-export default function ClientsAdmin() {
-  const [galleries, setGalleries] = useState<GallerySummary[] | null>(null);
-  const [creating, setCreating] = useState(false);
+type GalleryList = { galleries: GallerySummary[]; total: number; pageSize: number };
 
-  useEffect(() => {
-    adminFetch<{ galleries: GallerySummary[] }>("/clients")
-      .then((d) => setGalleries(d.galleries))
-      .catch((e) => toast.error(e.message));
-  }, []);
+export default function ClientsAdmin() {
+  const [creating, setCreating] = useState(false);
+  const list = useListParams();
+  const { q, page } = list;
+  const { data, error, loading } = useAdminList<GalleryList>(`/clients?${new URLSearchParams({ q, page: String(page) })}`);
+  const galleries = data?.galleries;
 
   return (
     <>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl font-semibold">Clients</h1>
           <p className="mt-2 text-sm text-cream-dim">
@@ -56,10 +57,13 @@ export default function ClientsAdmin() {
         </Button>
       </div>
 
-      {!galleries && <p className="text-cream-dim">Loading…</p>}
-      {galleries?.length === 0 && <p className="text-cream-dim">No client galleries yet.</p>}
+      <ListSearch value={q} onSearch={list.setQuery} placeholder="Search client, shoot, phone, booking…" className="mb-6" />
 
-      <div className="grid gap-3">
+      {error && <p className="text-gold">{error}</p>}
+      {!data && !error && <p className="text-cream-dim">Loading…</p>}
+      {galleries?.length === 0 && !loading && <EmptyList q={q} empty="No client galleries yet." noun="galleries" />}
+
+      <div className={cn("grid gap-3 transition-opacity", loading && data && "opacity-50")}>
         {galleries?.map((g) => (
           <Link
             key={g.id}
@@ -82,6 +86,16 @@ export default function ClientsAdmin() {
         ))}
       </div>
 
+      {data && (
+        <ListPagination
+          page={page}
+          pageSize={data.pageSize}
+          total={data.total}
+          noun={["gallery", "galleries"]}
+          onPage={list.setPage}
+        />
+      )}
+
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">{creating && <NewGalleryForm />}</DialogContent>
       </Dialog>
@@ -94,7 +108,7 @@ function NewGalleryForm() {
   const [bookings, setBookings] = useState<PaidBooking[]>([]);
 
   useEffect(() => {
-    adminFetch<{ bookings: PaidBooking[] }>("/bookings")
+    adminFetch<{ bookings: PaidBooking[] }>("/bookings?pageSize=100")
       .then((d) => setBookings(d.bookings.filter((b) => b.status === "deposit_paid")))
       .catch(() => {});
   }, []);

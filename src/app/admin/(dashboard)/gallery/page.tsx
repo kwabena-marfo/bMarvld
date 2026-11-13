@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -25,8 +26,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { photoCategories, type Shot } from "@/data/gallery";
 import { adminFetch } from "@/lib/admin-api";
 import { sendJson } from "@/lib/forms";
+import { matchesSearch, paginate } from "@/lib/listQuery";
 import { photoDetailsSchema } from "@/lib/schemas";
 import { cn } from "@/lib/utils";
+
+const pageSize = 24; // fills whole rows of 2, 3 and 4
 
 type Upload = { name: string; state: "uploading" | "done" | "error"; message?: string };
 type Signature = { timestamp: number; signature: string; folder: string; apiKey: string; cloudName: string };
@@ -107,6 +111,9 @@ export default function GalleryAdmin() {
   }
 
   const busy = uploads.some((u) => u.state === "uploading");
+  const list = useListParams();
+  const found = photos?.filter((p) => matchesSearch(list.q, p.category, p.alt));
+  const shown = found && paginate(found, list.page, pageSize);
 
   return (
     <>
@@ -189,13 +196,19 @@ export default function GalleryAdmin() {
         )}
       </form>
 
+      <ListSearch value={list.q} onSearch={list.setQuery} placeholder="Search category or description…" className="mb-6" />
+
       {!photos && <p className="text-cream-dim">Loading…</p>}
-      {photos?.length === 0 && (
-        <p className="text-cream-dim">No uploads yet — the site is showing the bundled portfolio until you add some.</p>
+      {found?.length === 0 && (
+        <EmptyList
+          q={list.q}
+          empty="No uploads yet — the site is showing the bundled portfolio until you add some."
+          noun="photos"
+        />
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {photos?.map((p) => (
+        {shown?.items.map((p) => (
           <div key={p.id} className="group relative aspect-square overflow-hidden bg-ink-soft">
             <Image src={p.src} alt={p.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-linear-to-t from-ink/90 p-2 pl-3 text-xs">
@@ -223,6 +236,16 @@ export default function GalleryAdmin() {
           </div>
         ))}
       </div>
+
+      {found && (
+        <ListPagination
+          page={list.page}
+          pageSize={pageSize}
+          total={found.length}
+          noun={["photo", "photos"]}
+          onPage={list.setPage}
+        />
+      )}
     </>
   );
 }

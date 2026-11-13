@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,7 +28,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { depositFor, formatCedis, type Package } from "@/data/packages";
 import { adminFetch } from "@/lib/admin-api";
 import { ApiError, applyFieldErrors, sendJson } from "@/lib/forms";
+import { matchesSearch, paginate } from "@/lib/listQuery";
 import { packageSchema } from "@/lib/schemas";
+import { cn } from "@/lib/utils";
+
+const pageSize = 10;
 
 // The API takes features as a list; the form edits them one per line.
 const formSchema = packageSchema.omit({ features: true }).extend({ featuresText: z.string().max(1200) });
@@ -98,9 +103,15 @@ export default function PackagesAdmin() {
     }
   }
 
+  const list = useListParams();
+  const found = packages?.filter((p) => matchesSearch(list.q, p.name, p.duration, p.price, ...p.features));
+  const shown = found && paginate(found, list.page, pageSize);
+  // Moving packages only makes sense while the whole list is in view.
+  const reorderable = !list.q;
+
   return (
     <>
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="font-display text-4xl font-semibold">Packages</h1>
           <p className="mt-2 text-sm text-cream-dim">
@@ -112,79 +123,100 @@ export default function PackagesAdmin() {
         </Button>
       </div>
 
+      <ListSearch value={list.q} onSearch={list.setQuery} placeholder="Search packages…" className="mb-6" />
+
       {!packages && <p className="text-cream-dim">Loading…</p>}
-      {packages?.length === 0 && <p className="text-cream-dim">No packages yet — add your first one.</p>}
+      {found?.length === 0 && <EmptyList q={list.q} empty="No packages yet — add your first one." noun="packages" />}
 
       <div className="grid gap-3">
-        {packages?.map((p, i) => (
-          <div
-            key={p.id}
-            className="grid gap-4 border border-cream/15 p-5 md:grid-cols-[auto_1fr_auto] md:items-center"
-          >
-            <div className="flex gap-1 md:flex-col">
-              <Button variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">
-                <ArrowUpIcon />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                disabled={i === packages.length - 1}
-                onClick={() => move(i, 1)}
-                aria-label="Move down"
-              >
-                <ArrowDownIcon />
-              </Button>
-            </div>
+        {shown?.items.map((p, n) => {
+          // Position in the full list, which is the order shown on the site.
+          const i = shown.offset + n;
+          return (
+            <div
+              key={p.id}
+              className={cn(
+                "grid gap-4 border border-cream/15 p-5 md:items-center",
+                reorderable ? "md:grid-cols-[auto_1fr_auto]" : "md:grid-cols-[1fr_auto]",
+              )}
+            >
+              {reorderable && (
+                <div className="flex gap-1 md:flex-col">
+                  <Button variant="ghost" size="icon-sm" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">
+                    <ArrowUpIcon />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled={i === (packages?.length ?? 0) - 1}
+                    onClick={() => move(i, 1)}
+                    aria-label="Move down"
+                  >
+                    <ArrowDownIcon />
+                  </Button>
+                </div>
+              )}
 
-            <div className={p.active ? "" : "opacity-50"}>
-              <div className="flex flex-wrap items-center gap-3">
-                <p className="font-display text-xl">{p.name}</p>
-                {!p.active && <Badge variant="outline">Hidden</Badge>}
+              <div className={p.active ? "" : "opacity-50"}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="font-display text-xl">{p.name}</p>
+                  {!p.active && <Badge variant="outline">Hidden</Badge>}
+                </div>
+                <p className="mt-1 text-sm">
+                  <span className="text-gold">{formatCedis(p.price)}</span>
+                  <span className="text-cream-dim">
+                    {" "}
+                    · {p.depositPercent}% deposit ({formatCedis(depositFor(p))}) · {p.duration}
+                  </span>
+                </p>
+                {p.features.length > 0 && <p className="mt-1 text-sm text-cream-dim">{p.features.join(" · ")}</p>}
               </div>
-              <p className="mt-1 text-sm">
-                <span className="text-gold">{formatCedis(p.price)}</span>
-                <span className="text-cream-dim">
-                  {" "}
-                  · {p.depositPercent}% deposit ({formatCedis(depositFor(p))}) · {p.duration}
-                </span>
-              </p>
-              {p.features.length > 0 && <p className="mt-1 text-sm text-cream-dim">{p.features.join(" · ")}</p>}
-            </div>
 
-            <div className="flex items-center gap-2">
-              <label className="mr-2 flex items-center gap-2 text-xs tracking-[0.15em] text-cream-dim uppercase">
-                <Switch checked={p.active} onCheckedChange={(checked) => setActive(p, checked)} />
-                Available
-              </label>
-              <Button variant="ghost" size="icon-sm" onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
-                <PencilIcon />
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger
-                  render={<Button variant="ghost" size="icon-sm" aria-label={`Delete ${p.name}`} />}
-                >
-                  <Trash2Icon className="text-destructive" />
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {p.name}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      It disappears from the site. Existing bookings keep their price and details. To hide it
-                      temporarily, switch it off instead.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction variant="destructive" onClick={() => remove(p)}>
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+              <div className="flex items-center gap-2">
+                <label className="mr-2 flex items-center gap-2 text-xs tracking-[0.15em] text-cream-dim uppercase">
+                  <Switch checked={p.active} onCheckedChange={(checked) => setActive(p, checked)} />
+                  Available
+                </label>
+                <Button variant="ghost" size="icon-sm" onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
+                  <PencilIcon />
+                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={<Button variant="ghost" size="icon-sm" aria-label={`Delete ${p.name}`} />}
+                  >
+                    <Trash2Icon className="text-destructive" />
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete {p.name}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        It disappears from the site. Existing bookings keep their price and details. To hide it
+                        temporarily, switch it off instead.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction variant="destructive" onClick={() => remove(p)}>
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
+
+      {found && (
+        <ListPagination
+          page={list.page}
+          pageSize={pageSize}
+          total={found.length}
+          noun={["package", "packages"]}
+          onPage={list.setPage}
+        />
+      )}
 
       <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
         <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">

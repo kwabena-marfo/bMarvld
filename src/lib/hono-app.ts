@@ -35,6 +35,7 @@ import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession }
 import { deleteImage, getUploadedImage, privateZipUrl, signPrivateUpload, signUpload } from "./cloudinary";
 import { addPhoto, listPhotos, removePhoto } from "./photos";
 import { SITE_URL } from "./siteUrl";
+import { pageParams } from "./listQuery";
 import {
   createPackage,
   deletePackage,
@@ -198,8 +199,10 @@ admin.use(requireAdmin);
 
 admin.get("/me", (c) => c.json({ email: c.get("adminEmail") }));
 
+// ?q= search, ?page= / ?pageSize= paging, ?all=1 to include unpaid and failed.
 admin.get("/bookings", async (c) => {
-  return c.json({ bookings: await listBookings() });
+  const { q, page, pageSize, all } = c.req.query();
+  return c.json(await listBookings({ q, includeUnpaid: all === "1", page: pageParams(page, pageSize) }));
 });
 
 admin.get("/packages", async (c) => {
@@ -292,7 +295,10 @@ admin.delete("/photos/:id", async (c) => {
 
 const photoKind = z.enum(["proofs", "finals"]);
 
-admin.get("/clients", async (c) => c.json({ galleries: await listGalleries() }));
+admin.get("/clients", async (c) => {
+  const { q, page, pageSize } = c.req.query();
+  return c.json(await listGalleries({ q, page: pageParams(page, pageSize) }));
+});
 
 admin.post("/clients", async (c) => {
   const parsed = clientGallerySchema.safeParse(await readJson(c));
