@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Josefin_Sans, Montserrat } from "next/font/google";
 import ThemeToggle, { ThemeProvider } from "@/components/ThemeToggle";
+import { SITE_URL } from "@/lib/siteUrl";
 import "./globals.css";
 
 // Josefin Sans echoes the geometric, high-waisted letterforms of the logo;
@@ -16,17 +17,21 @@ const montserrat = Montserrat({
   subsets: ["latin"],
 });
 
+const title = "B.Marvld Photography | Photographer in Accra, Ghana";
 const description =
-  "Studio portraits, fashion, kids and graduation photography by Bright Marvl of B.Marvld. ...be marveled.";
+  "Studio portraits, fashion, kids and graduation photography in Accra, Ghana by Bright Marvl of B.Marvld. See the work and book your session online. ...be marveled.";
 
 // Favicon, app icons and the social share image come from the icon.png,
 // apple-icon.png, favicon.ico and opengraph-image.png files in this folder.
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.APP_URL || "http://localhost:3000"),
-  title: { default: "B.Marvld — Photography", template: "%s — B.Marvld" },
+  metadataBase: new URL(SITE_URL),
+  title: { default: title, template: "%s | B.Marvld" },
   description,
-  openGraph: { title: "B.Marvld — Photography", description, siteName: "B.Marvld", type: "website" },
-  twitter: { card: "summary_large_image" },
+  applicationName: "B.Marvld",
+  keywords: ["B.Marvld", "BMarvld", "Bright Marvl", "photographer Accra", "photography Ghana", "studio portraits Accra"],
+  alternates: { canonical: "/" },
+  openGraph: { title, description, siteName: "B.Marvld", type: "website", url: "/", locale: "en_GH" },
+  twitter: { card: "summary_large_image", title, description },
 };
 
 export const viewport: Viewport = {

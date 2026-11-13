@@ -8,7 +8,27 @@ import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { heroLeft, heroRight, studioBackdrop } from "@/data/gallery";
+import { SITE_URL } from "@/lib/siteUrl";
 import { cn } from "@/lib/utils";
+
+// Tells Google who B.Marvld is, so searches for the name or for photographers
+// in Accra can show the business properly.
+const businessJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "ProfessionalService",
+  "@id": `${SITE_URL}/#business`,
+  name: "B.Marvld Photography",
+  alternateName: ["B.Marvld", "BMarvld"],
+  description: "Studio portraits, fashion, kids and graduation photography in Accra, Ghana by Bright Marvl.",
+  url: SITE_URL,
+  image: `${SITE_URL}/brand/b-marvld.jpg`,
+  logo: `${SITE_URL}/icon.png`,
+  slogan: "...be marveled",
+  founder: { "@type": "Person", name: "Bright Marvl", jobTitle: "Photographer" },
+  address: { "@type": "PostalAddress", addressLocality: "Accra", addressCountry: "GH" },
+  areaServed: { "@type": "Country", name: "Ghana" },
+  sameAs: ["https://instagram.com/b.marvld"],
+};
 
 function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
@@ -22,6 +42,10 @@ function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) 
 export default function Home() {
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(businessJsonLd).replace(/</g, "\\u003c") }}
+      />
       <SiteHeader />
       <main className="flex-1">
         {/* Hero */}
