@@ -3,16 +3,36 @@ import { z } from "zod";
 import {
   blockDateSchema,
   bookingSchema,
+  clientGallerySchema,
   emailSchema,
   loginCodeSchema,
   packageSchema,
   photoDetailsSchema,
+  shareLinkSchema,
 } from "./schemas";
+import {
+  addPhoto as addClientPhoto,
+  createGallery,
+  deleteGallery,
+  finalPublicIds,
+  getGalleryForAdmin,
+  listGalleries,
+  removePhoto as removeClientPhoto,
+  reopenSelection,
+  setProofSelected,
+  shareLink,
+  shareUrl,
+  submitSelection,
+  updateGallery,
+  uploadFolderFor,
+} from "./clientGalleries";
+import { emailFinalLink, emailProofLink, emailSelectionSubmitted } from "./mailer";
+import { textFinalLink, textProofLink, textSelectionSubmitted } from "./sms";
 import { abandonBooking, cancelPendingBooking, confirmBooking, createBooking, listBookings } from "./bookings";
 import { blockDate, unavailableDates, unblockDate, upcomingLocks } from "./dateLocks";
 import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } from "./paystack";
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
-import { deleteImage, getUploadedImage, signUpload } from "./cloudinary";
+import { deleteImage, getUploadedImage, privateZipUrl, signPrivateUpload, signUpload } from "./cloudinary";
 import { addPhoto, listPhotos, removePhoto } from "./photos";
 import {
   createPackage,
@@ -36,6 +56,9 @@ async function readJson(c: { req: { json: () => Promise<unknown> } }) {
     return undefined;
   }
 }
+
+// The site's public address, for links in payments, texts and emails.
+const appUrl = (c: { req: { url: string } }) => process.env.APP_URL || new URL(c.req.url).origin;
 
 // First message per field, in the shape the forms map onto react-hook-form's setError.
 function fieldErrors(error: z.ZodError) {
@@ -83,14 +106,13 @@ app.post("/bookings", async (c) => {
   }
 
   const { booking } = result;
-  const appUrl = process.env.APP_URL || new URL(c.req.url).origin;
 
   try {
     const checkout = await initializeTransaction({
       email: booking.email,
       amount: Math.round(booking.deposit * 100),
       reference: booking.reference,
-      callback_url: `${appUrl}/booking/confirm`,
+      callback_url: `${appUrl(c)}/booking/confirm`,
       metadata: {
         name: booking.name,
         phone: booking.phone,
@@ -262,6 +284,119 @@ admin.delete("/photos/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+// ------------------------------------------------------- client galleries ----
+
+const photoKind = z.enum(["proofs", "finals"]);
+
+admin.get("/clients", async (c) => c.json({ galleries: await listGalleries() }));
+
+admin.post("/clients", async (c) => {
+  const parsed = clientGallerySchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    return c.json({ error: "Please fix the highlighted fields", fieldErrors: fieldErrors(parsed.error) }, 400);
+  }
+  return c.json({ id: await createGallery(parsed.data) });
+});
+
+admin.get("/clients/:id", async (c) => {
+  const gallery = await getGalleryForAdmin(c.req.param("id"), appUrl(c));
+  if (!gallery) return c.json({ error: "Gallery not found" }, 404);
+  return c.json({ gallery });
+});
+
+admin.patch("/clients/:id", async (c) => {
+  const parsed = clientGallerySchema.partial().safeParse(await readJson(c));
+  if (!parsed.success) {
+    return c.json({ error: "Please fix the highlighted fields", fieldErrors: fieldErrors(parsed.error) }, 400);
+  }
+  if (!(await updateGallery(c.req.param("id"), parsed.data))) return c.json({ error: "Gallery not found" }, 404);
+  return c.json({ ok: true });
+});
+
+admin.delete("/clients/:id", async (c) => {
+  if (!(await deleteGallery(c.req.param("id")))) return c.json({ error: "Gallery not found" }, 404);
+  return c.json({ ok: true });
+});
+
+admin.post("/clients/:id/:kind{proofs|finals}/sign", (c) => {
+  const kind = photoKind.safeParse(c.req.param("kind"));
+  const folder = kind.success && uploadFolderFor(c.req.param("id"), kind.data);
+  if (!folder) return c.json({ error: "Gallery not found" }, 404);
+  return c.json(signPrivateUpload(folder));
+});
+
+admin.post("/clients/:id/:kind{proofs|finals}", async (c) => {
+  const kind = photoKind.safeParse(c.req.param("kind"));
+  const body = z.object({ publicId: z.string().min(1), name: z.string().max(200) }).safeParse(await readJson(c));
+  if (!kind.success || !body.success) return c.json({ error: "Invalid photo" }, 400);
+  const photo = await addClientPhoto(c.req.param("id"), kind.data, body.data.publicId, body.data.name);
+  if (!photo) return c.json({ error: "Upload not found on Cloudinary" }, 400);
+  return c.json({ ok: true });
+});
+
+admin.delete("/clients/:id/:kind{proofs|finals}/:photoId", async (c) => {
+  const kind = photoKind.safeParse(c.req.param("kind"));
+  if (!kind.success || !(await removeClientPhoto(c.req.param("id"), kind.data, c.req.param("photoId")))) {
+    return c.json({ error: "Photo not found" }, 404);
+  }
+  return c.json({ ok: true });
+});
+
+// Creates (or extends) the client's selection or delivery link, optionally
+// texting and emailing it to them.
+admin.post("/clients/:id/share/:link", async (c) => {
+  const link = z.enum(["proof", "final"]).safeParse(c.req.param("link"));
+  const body = shareLinkSchema.safeParse(await readJson(c));
+  if (!link.success || !body.success) return c.json({ error: "Choose how many days the link stays open" }, 400);
+
+  const current = await getGalleryForAdmin(c.req.param("id"), appUrl(c));
+  if (!current) return c.json({ error: "Gallery not found" }, 404);
+  if (link.data === "proof" ? !current.proofs.length : !current.finals.length) {
+    return c.json({ error: `Upload ${link.data === "proof" ? "the proofs" : "the edited photos"} first` }, 400);
+  }
+
+  const g = (await shareLink(c.req.param("id"), link.data, body.data.days))!;
+  const { token, expiresAt } = link.data === "proof" ? g.proofLink! : g.finalLink!;
+  const url = shareUrl(appUrl(c), link.data, token);
+  if (body.data.notify) {
+    await Promise.all(
+      link.data === "proof"
+        ? [textProofLink(g, url, expiresAt, g.maxSelections), emailProofLink(g, url, expiresAt, g.maxSelections)]
+        : [textFinalLink(g, url, expiresAt), emailFinalLink(g, url, expiresAt)]
+    );
+  }
+  return c.json({ url, expiresAt });
+});
+
+admin.post("/clients/:id/reopen", async (c) => {
+  if (!(await reopenSelection(c.req.param("id")))) return c.json({ error: "Gallery not found" }, 404);
+  return c.json({ ok: true });
+});
+
 app.route("/admin", admin);
+
+// The client's side, reached through the unguessable token in their link.
+
+app.post("/proofs/:token/select", async (c) => {
+  const body = z.object({ photoId: z.string().min(1), selected: z.boolean() }).safeParse(await readJson(c));
+  if (!body.success) return c.json({ error: "Invalid request" }, 400);
+  const result = await setProofSelected(c.req.param("token"), body.data.photoId, body.data.selected);
+  if (!result.ok) return c.json({ error: result.error }, 409);
+  return c.json({ selected: result.selected });
+});
+
+app.post("/proofs/:token/submit", async (c) => {
+  const g = await submitSelection(c.req.param("token"));
+  if (!g) return c.json({ error: "Choose at least one photo first — or this link has closed" }, 409);
+  const adminUrl = `${appUrl(c)}/admin/clients/${g.id}`;
+  await Promise.all([textSelectionSubmitted(g, adminUrl), emailSelectionSubmitted(g, adminUrl)]);
+  return c.json({ ok: true });
+});
+
+app.get("/photos/:token/zip", async (c) => {
+  const finals = await finalPublicIds(c.req.param("token"));
+  if (!finals?.publicIds.length) return c.json({ error: "This link has closed" }, 404);
+  return c.redirect(privateZipUrl(finals.publicIds, finals.title));
+});
 
 export default app;

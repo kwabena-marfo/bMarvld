@@ -1,6 +1,8 @@
 import axios from "axios";
 import { formatCedis } from "@/data/packages";
 import type { Booking } from "./bookings";
+import type { GalleryContact } from "./clientGalleries";
+import { formatDate } from "./formatDate";
 
 const ENDPOINT = "https://api.mnotify.com/api/sms/quick";
 
@@ -50,13 +52,13 @@ export async function notifyBookingConfirmed(b: Booking) {
   await Promise.all([
     trySend(
       [b.phone],
-      `Hi ${firstName(b)}, your B.Marvld ${b.packageName} session on ${b.date} at ${b.time} is confirmed. ` +
+      `Hi ${firstName(b)}, your B.Marvld ${b.packageName} session on ${formatDate(b.date)} at ${b.time} is confirmed. ` +
         `Deposit of ${formatCedis(b.deposit)} received; balance ${formatCedis(b.price - b.deposit)} is due on the day. ` +
         `Ref: ${b.reference}. ...be marveled`
     ),
     trySend(
       adminPhones(),
-      `New booking: ${b.name} (${b.phone}) - ${b.packageName}, ${b.date} ${b.time} at ${b.location}. ` +
+      `New booking from ${b.name} (${b.phone}) for ${b.packageName}, ${formatDate(b.date)} ${b.time} at ${b.location}. ` +
         `Deposit ${formatCedis(b.deposit)} paid. Ref ${b.reference}`
     ),
   ]);
@@ -66,13 +68,36 @@ export async function notifyBookingClash(b: Booking) {
   await Promise.all([
     trySend(
       [b.phone],
-      `Hi ${firstName(b)}, we received your ${formatCedis(b.deposit)} deposit (Ref ${b.reference}), but ${b.date} ` +
+      `Hi ${firstName(b)}, we received your ${formatCedis(b.deposit)} deposit (Ref ${b.reference}), but ${formatDate(b.date)} ` +
         `was just taken. B.Marvld will call you shortly to reschedule or refund.`
     ),
     trySend(
       adminPhones(),
-      `ACTION NEEDED: ${b.name} (${b.phone}) paid ${formatCedis(b.deposit)} for ${b.date}, but that date is already ` +
+      `ACTION NEEDED: ${b.name} (${b.phone}) paid ${formatCedis(b.deposit)} for ${formatDate(b.date)}, but that date is already ` +
         `taken. Reschedule or refund. Ref ${b.reference}`
     ),
   ]);
+}
+
+// ------------------------------------------------------- client galleries ----
+
+export async function textProofLink(g: GalleryContact, url: string, expiresAt: Date, maxSelections: number | null) {
+  const pick = maxSelections ? `your ${maxSelections} favourites` : "your favourites";
+  await trySend(
+    [g.clientPhone],
+    `Hi ${g.clientName.split(" ")[0]}, your B.Marvld photos are ready! Pick ${pick} here: ${url} ` +
+      `(open until ${formatDate(expiresAt)}). ...be marveled`
+  );
+}
+
+export async function textFinalLink(g: GalleryContact, url: string, expiresAt: Date) {
+  await trySend(
+    [g.clientPhone],
+    `Hi ${g.clientName.split(" ")[0]}, your edited B.Marvld photos are ready to view and download: ${url} ` +
+      `(available until ${formatDate(expiresAt)}). ...be marveled`
+  );
+}
+
+export async function textSelectionSubmitted(g: { clientName: string; title: string; count: number }, adminUrl: string) {
+  await trySend(adminPhones(), `${g.clientName} picked ${g.count} photos from ${g.title}. See them: ${adminUrl}`);
 }

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seed:demo": "node --experimental-strip-types --no-warnings --env-file=.env.local scripts/seed-demo.mjs"
+    "cloudinary:watermark": "node --env-file=.env.local scripts/upload-watermark.mjs",
+    "seed:demo":"node --experimental-strip-types --no-warnings --env-file=.env.local scripts/seed-demo.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

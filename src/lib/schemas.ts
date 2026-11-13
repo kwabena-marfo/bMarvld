@@ -47,6 +47,26 @@ export const blockDateSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date"),
 });
 
+export const clientGallerySchema = z.object({
+  clientName: z.string("Enter the client's name").trim().min(2, "Enter the client's name").max(80),
+  clientPhone: z
+    .string("Enter a valid phone number")
+    .trim()
+    .regex(/^\+?[0-9\s-]{9,15}$/, "Enter a valid phone number"),
+  clientEmail: z.union([z.email("Enter a valid email").trim().toLowerCase(), z.literal("")]),
+  title: z.string("Name the shoot").trim().min(2, "Name the shoot, e.g. Graduation portraits").max(80),
+  // How many photos the client may pick (their package's edited photos); null for no limit.
+  maxSelections: z.number().int("Use a whole number").min(1, "At least 1").max(1000).nullable(),
+  bookingReference: z.string().trim().max(40).optional().default(""),
+});
+
+export type ClientGalleryInput = z.output<typeof clientGallerySchema>;
+
+export const shareLinkSchema = z.object({
+  days: z.number().int().min(1, "At least 1 day").max(365, "At most a year"),
+  notify: z.boolean(), // also text and email the link to the client
+});
+
 export const photoDetailsSchema = z.object({
   category: z.enum(photoCategories, "Choose a category"),
   alt: z.string().trim().max(200).default(""),

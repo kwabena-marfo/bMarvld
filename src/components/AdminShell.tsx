@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/admin", label: "Bookings" },
+  { href: "/admin/clients", label: "Clients" },
   { href: "/admin/packages", label: "Packages" },
   { href: "/admin/gallery", label: "Gallery" },
   { href: "/admin/dates", label: "Dates" },
@@ -18,7 +19,7 @@ const nav = [
 
 // Every admin API call is already session-checked on the server; this guard
 // just avoids flashing the dashboard to a signed-out visitor.
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default function AdminShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [email, setEmail] = useState<string | null>(null);
@@ -50,7 +51,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               <Link
                 key={n.href}
                 href={n.href}
-                className={cn(pathname === n.href ? "text-gold" : "text-cream-dim hover:text-cream")}
+                className={cn(
+                  pathname === n.href || (n.href !== "/admin" && pathname.startsWith(`${n.href}/`))
+                    ? "text-gold"
+                    : "text-cream-dim hover:text-cream"
+                )}
               >
                 {n.label}
               </Link>

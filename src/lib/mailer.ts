@@ -1,6 +1,8 @@
 import nodemailer, { type SendMailOptions } from "nodemailer";
 import { formatCedis } from "@/data/packages";
 import type { Booking } from "./bookings";
+import type { GalleryContact } from "./clientGalleries";
+import { formatDate } from "./formatDate";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -59,7 +61,7 @@ function brandedEmail(heading: string, intro: string, rows: [string, string][], 
 const bookingRows = (b: Booking): [string, string][] => [
   ["Reference", b.reference],
   ["Package", b.packageName],
-  ["Date", b.date],
+  ["Date", formatDate(b.date)],
   ["Time", b.time],
   ["Location", b.location],
   ["Deposit paid", formatCedis(b.deposit)],
@@ -89,11 +91,12 @@ async function trySend(mail: SendMailOptions) {
 }
 
 export async function emailBookingConfirmed(b: Booking) {
-  const summary = `${b.packageName}, ${b.date} at ${b.time}`;
+  const date = formatDate(b.date);
+  const summary = `${b.packageName}, ${date} at ${b.time}`;
   await Promise.all([
     trySend({
       to: b.email,
-      subject: `Your B.Marvld session is confirmed — ${b.date}`,
+      subject: `Your B.Marvld session is confirmed for ${date}`,
       text: `Hi ${b.name}, your ${summary} (${b.location}) is confirmed. Deposit ${formatCedis(b.deposit)} received; balance ${formatCedis(b.price - b.deposit)} is due on the day. Ref ${b.reference}.`,
       html: brandedEmail(
         "Your session is confirmed",
@@ -105,8 +108,8 @@ export async function emailBookingConfirmed(b: Booking) {
     trySend({
       to: adminEmails(),
       replyTo: b.email,
-      subject: `New booking: ${b.name} — ${summary}`,
-      text: `New booking: ${b.name} (${b.phone}, ${b.email}) - ${summary} at ${b.location}. Deposit ${formatCedis(b.deposit)} paid. Ref ${b.reference}.${b.notes ? ` Notes: ${b.notes}` : ""}`,
+      subject: `New booking from ${b.name}: ${summary}`,
+      text: `New booking from ${b.name} (${b.phone}, ${b.email}) for ${summary} at ${b.location}. Deposit ${formatCedis(b.deposit)} paid. Ref ${b.reference}.${b.notes ? ` Notes: ${b.notes}` : ""}`,
       html: brandedEmail(
         "New booking",
         "A deposit has been paid and the date is now booked.",
@@ -118,14 +121,15 @@ export async function emailBookingConfirmed(b: Booking) {
 }
 
 export async function emailBookingClash(b: Booking) {
+  const date = formatDate(b.date);
   await Promise.all([
     trySend({
       to: b.email,
-      subject: `About your B.Marvld booking — ${b.date}`,
-      text: `Hi ${b.name}, we received your ${formatCedis(b.deposit)} deposit (Ref ${b.reference}), but ${b.date} was just taken. B.Marvld will contact you shortly to reschedule or refund.`,
+      subject: `About your B.Marvld booking on ${date}`,
+      text: `Hi ${b.name}, we received your ${formatCedis(b.deposit)} deposit (Ref ${b.reference}), but ${date} was just taken. B.Marvld will contact you shortly to reschedule or refund.`,
       html: brandedEmail(
         "We need to reschedule",
-        `Hi ${escape(b.name)}, we received your deposit, but ${escape(b.date)} was booked by someone else moments before your payment completed.`,
+        `Hi ${escape(b.name)}, we received your deposit, but ${date} was booked by someone else moments before your payment completed.`,
         bookingRows(b),
         "B.Marvld will contact you shortly to pick a new date or refund your deposit in full."
       ),
@@ -133,8 +137,8 @@ export async function emailBookingClash(b: Booking) {
     trySend({
       to: adminEmails(),
       replyTo: b.email,
-      subject: `ACTION NEEDED: ${b.name} paid for a taken date (${b.date})`,
-      text: `${b.name} (${b.phone}, ${b.email}) paid ${formatCedis(b.deposit)} for ${b.date}, but that date is already taken. Reschedule or refund. Ref ${b.reference}.`,
+      subject: `ACTION NEEDED: ${b.name} paid for a taken date (${date})`,
+      text: `${b.name} (${b.phone}, ${b.email}) paid ${formatCedis(b.deposit)} for ${date}, but that date is already taken. Reschedule or refund. Ref ${b.reference}.`,
       html: brandedEmail(
         "Action needed: date clash",
         "This client paid a deposit for a date that's already booked. Reschedule or refund them.",
@@ -143,4 +147,52 @@ export async function emailBookingClash(b: Booking) {
       ),
     }),
   ]);
+}
+
+// ------------------------------------------------------- client galleries ----
+
+const linkButton = (url: string, label: string) =>
+  `<p style="margin: 24px 0;"><a href="${url}" style="background: #ffc800; color: #050505; padding: 12px 20px; font-weight: 700; text-decoration: none; letter-spacing: 1px;">${label}</a></p>`;
+
+export async function emailProofLink(g: GalleryContact, url: string, expiresAt: Date, maxSelections: number | null) {
+  const pick = maxSelections ? `your ${maxSelections} favourites` : "your favourites";
+  await trySend({
+    to: g.clientEmail,
+    subject: `Your B.Marvld photos are ready to choose from`,
+    text: `Hi ${g.clientName}, your ${g.title} photos are ready. Pick ${pick} here: ${url} (open until ${formatDate(expiresAt)}).`,
+    html: brandedEmail(
+      "Your photos are ready to choose from",
+      `Hi ${escape(g.clientName)}, the photos from your ${escape(g.title)} are ready. Tap the heart on ${pick} and send your selection. We'll edit those for you.${linkButton(url, "Choose your photos")}`,
+      [["Link open until", formatDate(expiresAt)]],
+      "These previews carry a watermark; your edited photos come without one. ...be marveled"
+    ),
+  });
+}
+
+export async function emailFinalLink(g: GalleryContact, url: string, expiresAt: Date) {
+  await trySend({
+    to: g.clientEmail,
+    subject: `Your edited B.Marvld photos are ready`,
+    text: `Hi ${g.clientName}, your edited ${g.title} photos are ready to view and download: ${url} (available until ${formatDate(expiresAt)}).`,
+    html: brandedEmail(
+      "Your edited photos are ready",
+      `Hi ${escape(g.clientName)}, your edited photos from your ${escape(g.title)} are ready to view and download.${linkButton(url, "See your photos")}`,
+      [["Available until", formatDate(expiresAt)]],
+      "Download them before the link closes. Thank you for choosing B.Marvld. ...be marveled"
+    ),
+  });
+}
+
+export async function emailSelectionSubmitted(g: { clientName: string; title: string; count: number }, adminUrl: string) {
+  await trySend({
+    to: adminEmails(),
+    subject: `${g.clientName} picked ${g.count} photos from ${g.title}`,
+    text: `${g.clientName} has sent their selection of ${g.count} photos for ${g.title}: ${adminUrl}`,
+    html: brandedEmail(
+      "A client sent their selection",
+      `${escape(g.clientName)} picked ${g.count} photos from ${escape(g.title)}.${linkButton(adminUrl, "See the selection")}`,
+      [],
+      "The admin page lists the original file names to edit."
+    ),
+  });
 }

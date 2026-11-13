@@ -1,0 +1,444 @@
+"use client";
+
+import { ArrowLeftIcon, CopyIcon, HeartIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import Image from "next/image";
+import Link from "next/link";
+import { useParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { galleryStatusLabels, type GalleryStatus } from "@/data/clientGalleries";
+import { adminFetch } from "@/lib/admin-api";
+import { uploadClientPhoto, type PhotoKind } from "@/lib/clientUpload";
+import { formatDate } from "@/lib/formatDate";
+import { sendJson } from "@/lib/forms";
+import { cn } from "@/lib/utils";
+
+type Photo = { id: string; name: string; width: number; height: number; src: string };
+type ShareInfo = { url: string; expiresAt: string };
+type Gallery = {
+  id: string;
+  clientName: string;
+  clientPhone: string;
+  clientEmail: string;
+  title: string;
+  maxSelections: number | null;
+  status: GalleryStatus;
+  proofs: Photo[];
+  selected: string[];
+  submittedAt?: string;
+  proofLink?: ShareInfo;
+  finals: Photo[];
+  finalLink?: ShareInfo;
+  deliveredAt?: string;
+};
+
+
+export default function ClientGalleryAdmin() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+  const [gallery, setGallery] = useState<Gallery | null>(null);
+  const [pickedOnly, setPickedOnly] = useState(false);
+
+  const load = useCallback(() => {
+    return adminFetch<{ gallery: Gallery }>(`/clients/${id}`)
+      .then((d) => setGallery(d.gallery))
+      .catch((e) => toast.error(e.message));
+  }, [id]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (!gallery) return <p className="text-cream-dim">Loading…</p>;
+
+  const selected = new Set(gallery.selected);
+  const picked = gallery.proofs.filter((p) => selected.has(p.id));
+  const proofsShown = pickedOnly ? picked : gallery.proofs;
+
+  async function removeGallery() {
+    try {
+      await sendJson(`/api/admin/clients/${id}`, undefined, "DELETE");
+      toast.success("Gallery deleted");
+      router.replace("/admin/clients");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    }
+  }
+
+  async function reopen() {
+    try {
+      await sendJson(`/api/admin/clients/${id}/reopen`);
+      toast.success("The client can change their selection again");
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not reopen");
+    }
+  }
+
+  function copyNames() {
+    navigator.clipboard
+      .writeText(picked.map((p) => p.name).join("\n"))
+      .then(() => toast.success(`${picked.length} file names copied`))
+      .catch(() => toast.error("Couldn't copy — select the list below instead"));
+  }
+
+  return (
+    <>
+      <Link href="/admin/clients" className="mb-6 inline-flex items-center gap-2 text-sm text-cream-dim hover:text-cream">
+        <ArrowLeftIcon className="size-4" /> All clients
+      </Link>
+
+      <div className="mb-10 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-4xl font-semibold">{gallery.clientName}</h1>
+          <p className="mt-1 text-cream-dim">
+            {gallery.title} · {gallery.clientPhone}
+            {gallery.clientEmail && ` · ${gallery.clientEmail}`}
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Badge variant={gallery.status === "submitted" ? "default" : "outline"} className="tracking-wider uppercase">
+            {galleryStatusLabels[gallery.status]}
+          </Badge>
+          <AlertDialog>
+            <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Delete gallery" />}>
+              <Trash2Icon className="text-destructive" />
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete {gallery.clientName}&apos;s gallery?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  All its proofs and edited photos are deleted from Cloudinary and both links stop working. This
+                  can&apos;t be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction variant="destructive" onClick={removeGallery}>
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+      </div>
+
+      <Step n={1} title="Proofs" hint="Upload the shoot. They're shrunk for previewing, and the client only ever sees them watermarked.">
+        <Uploader galleryId={id} kind="proofs" label="Upload proofs" onDone={load} />
+        {gallery.proofs.length > 0 && (
+          <div className="mt-6 mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-cream-dim">
+            <span>
+              {gallery.proofs.length} proofs · {picked.length}
+              {gallery.maxSelections ? ` of ${gallery.maxSelections}` : ""} picked
+            </span>
+            <label className="flex items-center gap-2">
+              <Switch checked={pickedOnly} onCheckedChange={setPickedOnly} />
+              Picked only
+            </label>
+          </div>
+        )}
+        <PhotoGrid
+          galleryId={id}
+          kind="proofs"
+          photos={proofsShown}
+          selected={selected}
+          onRemoved={load}
+          empty={pickedOnly ? "The client hasn't picked any photos yet." : undefined}
+        />
+      </Step>
+
+      <Step
+        n={2}
+        title="Client picks their favourites"
+        hint={
+          gallery.maxSelections
+            ? `They can choose up to ${gallery.maxSelections} photos.`
+            : "There's no limit on how many they can choose."
+        }
+      >
+        {gallery.submittedAt ? (
+          <div className="mb-6 border border-gold/40 bg-gold/5 p-4 text-sm">
+            <p>
+              <span className="text-gold">●</span> {gallery.clientName} sent {picked.length} photos on{" "}
+              {formatDate(new Date(gallery.submittedAt))}. Their selection is locked.
+            </p>
+            <Button variant="outline" size="sm" className="mt-3" onClick={reopen}>
+              Let them change it
+            </Button>
+          </div>
+        ) : null}
+        <ShareLink
+          galleryId={id}
+          kind="proof"
+          link={gallery.proofLink}
+          defaultDays={14}
+          disabled={!gallery.proofs.length}
+          disabledHint="Upload the proofs first."
+          onShared={load}
+        />
+        {picked.length > 0 && (
+          <div className="mt-8">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <p className="text-xs tracking-[0.2em] text-cream-dim uppercase">Files to edit ({picked.length})</p>
+              <Button variant="outline" size="sm" onClick={copyNames}>
+                <CopyIcon /> Copy file names
+              </Button>
+            </div>
+            <pre className="max-h-48 overflow-auto border border-cream/10 bg-ink-soft p-4 text-xs leading-relaxed text-cream-dim select-all">
+              {picked.map((p) => p.name).join("\n")}
+            </pre>
+          </div>
+        )}
+      </Step>
+
+      <Step n={3} title="Edited photos" hint="Upload the finished edits at full size. The client gets them without a watermark.">
+        <Uploader galleryId={id} kind="finals" label="Upload edited photos" onDone={load} />
+        <div className="mt-6">
+          <PhotoGrid galleryId={id} kind="finals" photos={gallery.finals} onRemoved={load} />
+        </div>
+      </Step>
+
+      <Step n={4} title="Deliver" hint="Sends the client a link to view and download their edited photos.">
+        <ShareLink
+          galleryId={id}
+          kind="final"
+          link={gallery.finalLink}
+          defaultDays={30}
+          disabled={!gallery.finals.length}
+          disabledHint="Upload the edited photos first."
+          onShared={load}
+        />
+      </Step>
+    </>
+  );
+}
+
+function Step({ n, title, hint, children }: { n: number; title: string; hint: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-12 border-t border-cream/10 pt-8">
+      <p className="text-xs tracking-[0.4em] text-gold uppercase">Step {n}</p>
+      <h2 className="mt-2 font-display text-2xl font-semibold">{title}</h2>
+      <p className="mt-1 mb-6 text-sm text-cream-dim">{hint}</p>
+      {children}
+    </section>
+  );
+}
+
+type UploadState = { total: number; done: number; failed: { name: string; message: string }[] };
+
+function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind: PhotoKind; label: string; onDone: () => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [state, setState] = useState<UploadState | null>(null);
+  const busy = !!state && state.done + state.failed.length < state.total;
+
+  async function upload(files: File[]) {
+    setState({ total: files.length, done: 0, failed: [] });
+    // A few at a time: fast, without saturating a phone connection.
+    const queue = [...files];
+    const worker = async () => {
+      for (let file = queue.shift(); file; file = queue.shift()) {
+        const name = file.name;
+        try {
+          await uploadClientPhoto(galleryId, kind, file);
+          setState((s) => s && { ...s, done: s.done + 1 });
+        } catch (e) {
+          const message = e instanceof Error ? e.message : "Upload failed";
+          setState((s) => s && { ...s, failed: [...s.failed, { name, message }] });
+        }
+      }
+    };
+    await Promise.all([worker(), worker(), worker()]);
+    onDone();
+  }
+
+  return (
+    <div>
+      <Button type="button" disabled={busy} onClick={() => input.current?.click()}>
+        <UploadIcon /> {busy ? `Uploading ${state.done + state.failed.length + 1} of ${state.total}…` : label}
+      </Button>
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          if (files.length) upload(files);
+        }}
+      />
+      {state && !busy && (
+        <p className="mt-3 text-sm text-cream-dim">
+          {state.done} uploaded{state.failed.length > 0 && `, ${state.failed.length} failed`}.
+        </p>
+      )}
+      {state && state.failed.length > 0 && (
+        <ul className="mt-2 space-y-1 text-sm text-destructive">
+          {state.failed.map((f) => (
+            <li key={f.name}>
+              {f.name}: {f.message}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function PhotoGrid({
+  galleryId,
+  kind,
+  photos,
+  selected,
+  onRemoved,
+  empty,
+}: {
+  galleryId: string;
+  kind: PhotoKind;
+  photos: Photo[];
+  selected?: Set<string>;
+  onRemoved: () => void;
+  empty?: string;
+}) {
+  async function remove(photo: Photo) {
+    try {
+      await sendJson(`/api/admin/clients/${galleryId}/${kind}/${photo.id}`, undefined, "DELETE");
+      onRemoved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    }
+  }
+
+  if (!photos.length) return empty ? <p className="text-sm text-cream-dim">{empty}</p> : null;
+
+  return (
+    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+      {photos.map((p) => {
+        const isPicked = selected?.has(p.id);
+        return (
+          <figure key={p.id} className={cn("group relative bg-ink-soft", isPicked && "ring-2 ring-gold")}>
+            <Image
+              src={p.src}
+              alt={p.name}
+              width={p.width}
+              height={p.height}
+              unoptimized
+              className="aspect-square w-full object-cover"
+            />
+            {isPicked && (
+              <HeartIcon className="absolute top-2 left-2 size-5 fill-gold text-gold drop-shadow" aria-label="Picked" />
+            )}
+            <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-linear-to-t from-ink/90 p-1 pl-2 text-[10px] text-cream-dim">
+              <span className="truncate">{p.name}</span>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={`Delete ${p.name}`}
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                onClick={() => remove(p)}
+              >
+                <Trash2Icon className="text-destructive" />
+              </Button>
+            </figcaption>
+          </figure>
+        );
+      })}
+    </div>
+  );
+}
+
+function ShareLink({
+  galleryId,
+  kind,
+  link,
+  defaultDays,
+  disabled,
+  disabledHint,
+  onShared,
+}: {
+  galleryId: string;
+  kind: "proof" | "final";
+  link?: ShareInfo;
+  defaultDays: number;
+  disabled: boolean;
+  disabledHint: string;
+  onShared: () => void;
+}) {
+  const [days, setDays] = useState(String(defaultDays));
+  const [notify, setNotify] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const url = link?.url;
+  const expired = link && new Date(link.expiresAt) < new Date();
+
+  async function share() {
+    setBusy(true);
+    try {
+      await sendJson(`/api/admin/clients/${galleryId}/share/${kind}`, { days: Number(days), notify });
+      toast.success(notify ? "Link sent to the client" : "Link ready to copy");
+      onShared();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not create the link");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {url && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Input readOnly value={url} className="max-w-xl flex-1 font-mono text-xs" onFocus={(e) => e.target.select()} />
+          <Button
+            variant="outline"
+            onClick={() => navigator.clipboard.writeText(url).then(() => toast.success("Link copied"))}
+          >
+            <CopyIcon /> Copy
+          </Button>
+          <span className={cn("w-full text-sm", expired ? "text-destructive" : "text-cream-dim")}>
+            {expired ? "Expired" : "Open until"} {formatDate(new Date(link!.expiresAt))}
+          </span>
+        </div>
+      )}
+      <div className="flex flex-wrap items-center gap-4">
+        <label className="flex items-center gap-2 text-sm text-cream-dim">
+          Open for
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={365}
+            value={days}
+            onChange={(e) => setDays(e.target.value)}
+            className="w-20"
+          />
+          days
+        </label>
+        <label className="flex items-center gap-2 text-sm text-cream-dim">
+          <Checkbox checked={notify} onCheckedChange={(v) => setNotify(v === true)} />
+          Text &amp; email it to the client
+        </label>
+        <Button disabled={disabled || busy || !(Number(days) >= 1)} onClick={share}>
+          {busy ? "Working…" : link ? (notify ? "Extend & resend" : "Extend link") : notify ? "Send link" : "Create link"}
+        </Button>
+      </div>
+      {disabled && <p className="text-sm text-cream-dim">{disabledHint}</p>}
+    </div>
+  );
+}
