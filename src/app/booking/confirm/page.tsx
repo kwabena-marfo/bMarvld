@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import Logo from "@/components/Logo";
 import { buttonVariants } from "@/components/ui/button";
@@ -25,6 +26,9 @@ export default function ConfirmPage({ searchParams }: PageProps<"/booking/confir
 }
 
 async function Result({ searchParams }: Pick<PageProps<"/booking/confirm">, "searchParams">) {
+  // Confirming stamps the booking with the current time, so it must happen at
+  // request time, never during a prerender.
+  await connection();
   const { reference } = await searchParams;
   const booking = typeof reference === "string" ? await confirmBooking(reference).catch(() => null) : null;
 
