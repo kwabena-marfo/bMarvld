@@ -34,6 +34,7 @@ import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } 
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
 import { deleteImage, getUploadedImage, privateZipUrl, signPrivateUpload, signUpload } from "./cloudinary";
 import { addPhoto, listPhotos, removePhoto } from "./photos";
+import { SITE_URL } from "./siteUrl";
 import {
   createPackage,
   deletePackage,
@@ -57,8 +58,11 @@ async function readJson(c: { req: { json: () => Promise<unknown> } }) {
   }
 }
 
-// The site's public address, for links in payments, texts and emails.
-const appUrl = (c: { req: { url: string } }) => process.env.APP_URL || new URL(c.req.url).origin;
+// The site's public address, for links in payments, texts and emails. Production
+// always uses the custom domain, whatever APP_URL says, so clients are never
+// sent to a preview copy of the site.
+const appUrl = (c: { req: { url: string } }) =>
+  process.env.VERCEL_ENV === "production" ? SITE_URL : process.env.APP_URL || new URL(c.req.url).origin;
 
 // First message per field, in the shape the forms map onto react-hook-form's setError.
 function fieldErrors(error: z.ZodError) {
