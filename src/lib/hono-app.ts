@@ -1,3 +1,4 @@
+import { Receiver } from "@upstash/qstash";
 import { Hono } from "hono";
 import { z } from "zod";
 import {
@@ -12,23 +13,28 @@ import {
 } from "./schemas";
 import {
   addPhoto as addClientPhoto,
+  clearExpiredGalleries,
   createGallery,
   deleteGallery,
   finalPublicIds,
+  galleriesToRemind,
   getGalleryForAdmin,
   listGalleries,
+  markReminded,
   pickedPublicIds,
   removePhoto as removeClientPhoto,
   reopenSelection,
+  setFinalFeatured,
   setProofSelected,
+  unmarkFeatured,
   shareLink,
   shareUrl,
   submitSelection,
   updateGallery,
   uploadFolderFor,
 } from "./clientGalleries";
-import { emailFinalLink, emailProofLink, emailSelectionSubmitted } from "./mailer";
-import { textFinalLink, textProofLink, textSelectionSubmitted } from "./sms";
+import { emailDeletionReminder, emailFinalLink, emailProofLink, emailSelectionSubmitted } from "./mailer";
+import { textDeletionReminder, textFinalLink, textProofLink, textSelectionSubmitted } from "./sms";
 import { abandonBooking, cancelPendingBooking, confirmBooking, createBooking, listBookings } from "./bookings";
 import { blockDate, unavailableDates, unblockDate, upcomingLocks } from "./dateLocks";
 import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } from "./paystack";
@@ -37,6 +43,7 @@ import { deleteImage, getUploadedImage, privateZipUrl, signPrivateUpload, signUp
 import { addPhoto, listPhotos, removePhoto } from "./photos";
 import { SITE_URL } from "./siteUrl";
 import { pageParams } from "./listQuery";
+import { listFeaturedForAdmin, removeFeatured } from "./featured";
 import {
   createPackage,
   deletePackage,
@@ -384,6 +391,19 @@ admin.post("/clients/:id/reopen", async (c) => {
   return c.json({ ok: true });
 });
 
+// Client favourites shown on the home page.
+admin.get("/featured", async (c) => {
+  const { q, page, pageSize } = c.req.query();
+  return c.json(await listFeaturedForAdmin({ q, page: pageParams(page, pageSize, 24) }));
+});
+
+admin.delete("/featured/:id", async (c) => {
+  const removed = await removeFeatured(c.req.param("id"));
+  if (!removed) return c.json({ error: "Photo not found" }, 404);
+  await unmarkFeatured(removed.galleryId, removed.finalId);
+  return c.json({ ok: true });
+});
+
 // The client's picks as a zip of the clean (unwatermarked) proofs.
 admin.get("/clients/:id/picks/zip", async (c) => {
   const picks = await pickedPublicIds(c.req.param("id"));
@@ -402,6 +422,41 @@ app.post("/proofs/:token/select", async (c) => {
   const result = await setProofSelected(c.req.param("token"), body.data.photoId, body.data.selected);
   if (!result.ok) return c.json({ error: result.error }, 409);
   return c.json({ selected: result.selected });
+});
+
+// Hourly clean-up, called by an Upstash QStash schedule (`npm run qstash:schedule`).
+// Public, so the request must carry QStash's signature for this exact URL; the
+// signing keys are per Upstash account, and the URL check stops a message meant
+// for another app on the same account being replayed here.
+app.post("/cron/cleanup", async (c) => {
+  const { QSTASH_CURRENT_SIGNING_KEY: current, QSTASH_NEXT_SIGNING_KEY: next } = process.env;
+  if (!current || !next) return c.json({ error: "QStash signing keys aren't set" }, 500);
+  const body = await c.req.text();
+  const signature = c.req.header("Upstash-Signature") ?? "";
+  const valid = await new Receiver({ currentSigningKey: current, nextSigningKey: next })
+    .verify({ signature, body, url: c.req.url })
+    .catch(() => false);
+  if (!valid) return c.json({ error: "Invalid signature" }, 401);
+
+  // Reminders first: a gallery due within the day is warned before anything is deleted.
+  const due = await galleriesToRemind();
+  for (const g of due) {
+    const url = shareUrl(appUrl(c), "final", g.token);
+    await Promise.all([textDeletionReminder(g.contact, url, g.expiresAt), emailDeletionReminder(g.contact, url, g.expiresAt)]);
+    await markReminded(g.id);
+  }
+  const cleared = await clearExpiredGalleries();
+  console.log(`Cleanup: ${due.length} reminders sent, ${cleared} galleries cleared`);
+  return c.json({ reminded: due.length, cleared });
+});
+
+// The client stars an edit to have it featured on the site (or un-stars it).
+app.post("/photos/:token/feature", async (c) => {
+  const body = z.object({ photoId: z.string().min(1), featured: z.boolean() }).safeParse(await readJson(c));
+  if (!body.success) return c.json({ error: "Invalid request" }, 400);
+  const result = await setFinalFeatured(c.req.param("token"), body.data.photoId, body.data.featured);
+  if (!result.ok) return c.json({ error: result.error }, 409);
+  return c.json({ featured: result.featured });
 });
 
 app.post("/proofs/:token/submit", async (c) => {

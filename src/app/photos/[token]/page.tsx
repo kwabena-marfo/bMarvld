@@ -33,9 +33,15 @@ async function Photos({ params }: Pick<PageProps<"/photos/[token]">, "params">) 
   return (
     <>
       <GalleryHeading eyebrow={gallery.title} title={`${gallery.clientName.split(" ")[0]}, your photos are ready`}>
-        Download them before {formatDate(gallery.expiresAt)}, when this link closes. ...be marveled
+        Please download them by {formatDate(gallery.expiresAt)}. After that this link closes and the photos are
+        removed from our gallery. ...be marveled
       </GalleryHeading>
-      <FinalGallery token={token} photos={gallery.photos} />
+      <FinalGallery
+        token={token}
+        photos={gallery.photos}
+        featured={gallery.featured}
+        maxFeatured={gallery.maxFeatured}
+      />
     </>
   );
 }

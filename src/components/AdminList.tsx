@@ -56,6 +56,8 @@ export function useAdminList<T>(path: string) {
     error: "",
   });
 
+  const [version, setVersion] = useState(0);
+
   useEffect(() => {
     let current = true;
     adminFetch<T>(path)
@@ -68,9 +70,15 @@ export function useAdminList<T>(path: string) {
     return () => {
       current = false;
     };
-  }, [path]);
+  }, [path, version]);
 
-  return { data: state.data, error: state.error, loading: state.path !== path };
+  return {
+    data: state.data,
+    error: state.error,
+    loading: state.path !== path,
+    /** Loads the same page again, after a change. */
+    reload: () => setVersion((v) => v + 1),
+  };
 }
 
 /** A search box that waits until you pause typing before it searches. */

@@ -173,12 +173,26 @@ export async function emailFinalLink(g: GalleryContact, url: string, expiresAt: 
   await trySend({
     to: g.clientEmail,
     subject: `Your edited B.Marvld photos are ready`,
-    text: `Hi ${g.clientName}, your edited ${g.title} photos are ready to view and download: ${url} (available until ${formatDate(expiresAt)}).`,
+    text: `Hi ${g.clientName}, your edited ${g.title} photos are ready to view and download: ${url}. Please download them by ${formatDate(expiresAt)}, when they're removed from our gallery.`,
     html: brandedEmail(
       "Your edited photos are ready",
       `Hi ${escape(g.clientName)}, your edited photos from your ${escape(g.title)} are ready to view and download.${linkButton(url, "See your photos")}`,
-      [["Available until", formatDate(expiresAt)]],
-      "Download them before the link closes. Thank you for choosing B.Marvld. ...be marveled"
+      [["Download by", formatDate(expiresAt)]],
+      "After that date the link closes and the photos are removed from our gallery, so save them somewhere safe. Thank you for choosing B.Marvld. ...be marveled"
+    ),
+  });
+}
+
+export async function emailDeletionReminder(g: GalleryContact, url: string, expiresAt: Date) {
+  await trySend({
+    to: g.clientEmail,
+    subject: `Reminder: download your B.Marvld photos`,
+    text: `Hi ${g.clientName}, a reminder that your ${g.title} photos are removed from our gallery on ${formatDate(expiresAt)}. If you haven't yet, download them now: ${url}`,
+    html: brandedEmail(
+      "Don't forget your photos",
+      `Hi ${escape(g.clientName)}, your photos from your ${escape(g.title)} are removed from our gallery soon. If you haven't saved them yet, download them now.${linkButton(url, "Download your photos")}`,
+      [["Removed on", formatDate(expiresAt)]],
+      "Thank you for choosing B.Marvld. ...be marveled"
     ),
   });
 }

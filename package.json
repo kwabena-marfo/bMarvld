@@ -8,12 +8,14 @@
     "start": "next start",
     "lint": "eslint",
     "cloudinary:watermark": "node --env-file=.env.local scripts/upload-watermark.mjs",
-    "seed:demo":"node --experimental-strip-types --no-warnings --env-file=.env.local scripts/seed-demo.mjs"
+    "qstash:schedule": "node --env-file=.env.local scripts/qstash-schedule.mjs",
+    "seed:demo": "node --experimental-strip-types --no-warnings --env-file=.env.local scripts/seed-demo.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "@hookform/resolvers": "^5.9.2",
     "@paystack/inline-js": "2.26.0",
+    "@upstash/qstash": "^2.12.0",
     "axios": "^1.20.0",
     "class-variance-authority": "^0.7.1",
     "cloudinary": "^2.11.0",

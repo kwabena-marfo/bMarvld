@@ -2,7 +2,9 @@ import Image from "next/image";
 import { Suspense } from "react";
 import { Aperture, Bokeh, Camera, CameraTripod, Softbox } from "@/components/Backdrops";
 import GallerySection, { GallerySkeleton } from "@/components/GallerySection";
+import ClientFavourites from "@/components/ClientFavourites";
 import Logo from "@/components/Logo";
+import SectionHeading from "@/components/SectionHeading";
 import { BookingSection, PackagesGrid, SectionSkeleton } from "@/components/PackagesSection";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
@@ -29,15 +31,6 @@ const businessJsonLd = {
   areaServed: { "@type": "Country", name: "Ghana" },
   sameAs: ["https://instagram.com/b.marvld"],
 };
-
-function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
-  return (
-    <div className="mb-12 text-center">
-      <p className="text-xs tracking-[0.4em] text-gold uppercase">{eyebrow}</p>
-      <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">{title}</h2>
-    </div>
-  );
-}
 
 export default function Home() {
   return (
@@ -114,6 +107,11 @@ export default function Home() {
             <GallerySection />
           </Suspense>
         </section>
+
+        {/* Edits clients chose to share; the section only appears once there are some. */}
+        <Suspense fallback={null}>
+          <ClientFavourites />
+        </Suspense>
 
         {/* About */}
         <section id="about" className="relative isolate scroll-mt-16 overflow-hidden bg-cream text-ink">

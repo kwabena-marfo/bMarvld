@@ -9,7 +9,9 @@ import {
   getPrivateImage,
   privateDownloadUrl,
   privateImageUrl,
+  publishPrivateImage,
 } from "./cloudinary";
+import { addFeatured, removeFeaturedCopy } from "./featured";
 import type { ClientGalleryInput } from "./schemas";
 import type { GalleryStatus } from "@/data/clientGalleries";
 
@@ -34,6 +36,10 @@ type GalleryDoc = ClientGalleryInput & {
   finals: ClientPhoto[];
   finalLink?: ShareLink;
   deliveredAt?: Date;
+  featured?: string[]; // final ids the client chose to have shown on the site
+  reminderSentAt?: Date; // "your photos are deleted tomorrow", sent once per deadline
+  clearedAt?: Date; // the delivery link closed and the photos were deleted from Cloudinary
+  clearedPicks?: string[]; // file names the client had picked, kept as a record after clearing
   createdAt: Date;
   updatedAt: Date;
 };
@@ -60,6 +66,7 @@ const isLive = (link?: ShareLink) => !!link && link.expiresAt > new Date();
 const byName = (a: ClientPhoto, b: ClientPhoto) => a.name.localeCompare(b.name, undefined, { numeric: true });
 
 function statusOf(g: GalleryDoc): GalleryStatus {
+  if (g.clearedAt) return "cleared";
   if (g.deliveredAt) return "delivered";
   if (g.submittedAt) return "submitted";
   return g.proofLink ? "selecting" : "new";
@@ -139,6 +146,9 @@ export async function getGalleryForAdmin(id: string, baseUrl: string) {
     finals: g.finals.map(thumb),
     finalLink: linkInfo(baseUrl, "final", g.finalLink),
     deliveredAt: g.deliveredAt,
+    featured: g.featured ?? [],
+    clearedAt: g.clearedAt,
+    clearedPicks: g.clearedPicks ?? [],
   };
 }
 
@@ -184,7 +194,8 @@ export async function removePhoto(id: string, kind: PhotoKind, photoId: string) 
   const g = await (await galleries()).findOneAndUpdate(
     { _id },
     {
-      $pull: { [kind]: { id: photoId }, ...(kind === "proofs" && { selected: photoId }) },
+      // A featured edit's public copy stays on the site; it can be taken down from Favourites.
+      $pull: { [kind]: { id: photoId }, ...(kind === "proofs" ? { selected: photoId } : { featured: photoId }) },
       $set: { updatedAt: new Date() },
     }
   );
@@ -208,7 +219,12 @@ export async function shareLink(id: string, kind: "proof" | "final", days: numbe
   };
   await collection.updateOne(
     { _id },
-    { $set: { [field]: link, updatedAt: new Date(), ...(kind === "final" && { deliveredAt: g.deliveredAt ?? new Date() }) } }
+    {
+      $set: { [field]: link, updatedAt: new Date(), ...(kind === "final" && { deliveredAt: g.deliveredAt ?? new Date() }) },
+      // Sharing again (after new uploads) makes a cleared gallery live again, and a
+      // new or extended delivery deadline gets its own reminder.
+      $unset: { clearedAt: "", ...(kind === "final" && { reminderSentAt: "" }) },
+    }
   );
   return { ...g, [field]: link } as GalleryDoc & { _id: ObjectId };
 }
@@ -292,6 +308,8 @@ export async function getFinalGallery(token: string) {
     clientName: g.clientName,
     title: g.title,
     expiresAt: g.finalLink!.expiresAt,
+    featured: g.featured ?? [],
+    maxFeatured: MAX_FEATURED,
     photos: [...g.finals].sort(byName).map((p) => ({
       id: p.id,
       width: p.width,
@@ -307,6 +325,119 @@ export async function finalPublicIds(token: string) {
   const g = await (await galleries()).findOne({ "finalLink.token": token });
   if (!g || !isLive(g.finalLink)) return null;
   return { title: `B.Marvld ${g.title}`, publicIds: g.finals.map((p) => p.publicId) };
+}
+
+// ------------------------------------------------- featuring on the site ----
+
+export const MAX_FEATURED = 2;
+
+type FeatureResult = { ok: true; featured: string[] } | { ok: false; error: string };
+
+/**
+ * The client stars (or un-stars) one of their edits from the delivery page. A
+ * starred photo goes live in "Client favourites" on the home page straight away.
+ */
+export async function setFinalFeatured(token: string, photoId: string, feature: boolean): Promise<FeatureResult> {
+  const collection = await galleries();
+  const g = await collection.findOne({ "finalLink.token": token });
+  if (!g || !isLive(g.finalLink)) return { ok: false, error: "This link has closed" };
+  const photo = g.finals.find((p) => p.id === photoId);
+  if (!photo) return { ok: false, error: "Photo not found" };
+
+  if (!feature) {
+    const updated = await collection.findOneAndUpdate(
+      { _id: g._id },
+      { $pull: { featured: photoId } },
+      { returnDocument: "after" }
+    );
+    await removeFeaturedCopy(g._id, photoId);
+    return { ok: true, featured: updated?.featured ?? [] };
+  }
+
+  if (g.featured?.includes(photoId)) return { ok: true, featured: g.featured };
+  // Claimed in the update itself, so quick taps can't go over the limit or copy a photo twice.
+  const claimed = await collection.findOneAndUpdate(
+    {
+      _id: g._id,
+      featured: { $ne: photoId },
+      $expr: { $lt: [{ $size: { $ifNull: ["$featured", []] } }, MAX_FEATURED] },
+    },
+    { $addToSet: { featured: photoId } },
+    { returnDocument: "after" }
+  );
+  if (!claimed) {
+    return { ok: false, error: `You can feature ${MAX_FEATURED} photos. Tap a starred one to swap it` };
+  }
+  try {
+    const copy = await publishPrivateImage(photo.publicId);
+    await addFeatured({ ...copy, galleryId: g._id, finalId: photoId, clientName: g.clientName, title: g.title });
+  } catch (err) {
+    console.error("Could not feature photo:", err);
+    await collection.updateOne({ _id: g._id }, { $pull: { featured: photoId } });
+    return { ok: false, error: "Couldn't add that photo. Please try again" };
+  }
+  return { ok: true, featured: claimed.featured ?? [] };
+}
+
+/** The admin took a favourite down: the client sees it un-starred. */
+export async function unmarkFeatured(galleryId: ObjectId, finalId: string) {
+  await (await galleries()).updateOne({ _id: galleryId }, { $pull: { featured: finalId } });
+}
+
+// ------------------------------------------------------------- clean-up ----
+// Run every hour by Upstash QStash (POST /api/cron/cleanup). Once a delivery
+// link closes, the gallery's proofs and edits are deleted from Cloudinary; a
+// day before, the client gets a reminder to download them. Photos the client
+// featured on the site are separate copies and stay. Galleries that were never
+// delivered are left alone.
+
+const BATCH = 20; // per run, to stay well inside a serverless time limit; the next run picks up the rest
+
+/** Galleries whose delivery link closes within the next day and haven't had a reminder. */
+export async function galleriesToRemind(now = new Date()) {
+  const docs = await (await galleries())
+    .find({
+      "finalLink.expiresAt": { $gt: now, $lte: new Date(now.getTime() + 86_400_000) },
+      reminderSentAt: { $exists: false },
+      clearedAt: { $exists: false },
+      "finals.0": { $exists: true },
+    })
+    .limit(BATCH)
+    .toArray();
+  return docs.map((g) => ({ id: g._id, contact: g as GalleryContact, token: g.finalLink!.token, expiresAt: g.finalLink!.expiresAt }));
+}
+
+export async function markReminded(id: ObjectId) {
+  await (await galleries()).updateOne({ _id: id }, { $set: { reminderSentAt: new Date() } });
+}
+
+/** Deletes the photos of every gallery whose delivery link has closed. Returns how many were cleared. */
+export async function clearExpiredGalleries(now = new Date()) {
+  const collection = await galleries();
+  const due = await collection
+    .find({ "finalLink.expiresAt": { $lte: now }, clearedAt: { $exists: false } })
+    .limit(BATCH)
+    .toArray();
+  for (const g of due) {
+    const id = g._id.toString();
+    await Promise.all([deletePrivateFolder(folderFor(id, "proofs")), deletePrivateFolder(folderFor(id, "finals"))]);
+    await deletePrivateFolder(`${clientsFolder}/${id}`);
+    const selected = new Set(g.selected);
+    await collection.updateOne(
+      { _id: g._id },
+      {
+        $set: {
+          clearedAt: new Date(),
+          clearedPicks: g.proofs.filter((p) => selected.has(p.id)).map((p) => p.name),
+          proofs: [],
+          finals: [],
+          selected: [],
+          updatedAt: new Date(),
+        },
+      }
+    );
+  }
+  return due.length;
 }
 
 /** The proofs the client picked, for the admin to download without the watermark. */

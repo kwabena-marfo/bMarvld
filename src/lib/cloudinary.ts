@@ -110,6 +110,31 @@ export function privateZipUrl(publicIds: string[], name: string) {
   });
 }
 
+// ------------------------------------------------------ client favourites ----
+// When a client features one of their edits on the site, a public copy is made
+// in its own folder, so it stays up after their private gallery is cleared.
+
+export const featuredFolder = "bmarvld/featured";
+
+export async function publishPrivateImage(publicId: string) {
+  // Cloudinary fetches this signed address itself; 2400 px is plenty for the site.
+  const source = cloudinary.url(publicId, {
+    type: "authenticated",
+    sign_url: true,
+    format: "jpg",
+    transformation: [{ width: 2400, height: 2400, crop: "limit", quality: 90 }],
+  });
+  const res = await cloudinary.uploader.upload(source, { folder: featuredFolder, resource_type: "image" });
+  return { publicId: res.public_id, width: res.width, height: res.height };
+}
+
+/** A public photo at a given width, in the best format for the visitor's browser. */
+export function publicImageUrl(publicId: string, width: number) {
+  return cloudinary.url(publicId, {
+    transformation: [{ width, height: width, crop: "limit", quality: "auto", fetch_format: "auto" }],
+  });
+}
+
 export async function deletePrivateFolder(folder: string) {
   await cloudinary.api.delete_resources_by_prefix(`${folder}/`, { resource_type: "image", type: "authenticated" });
   await cloudinary.api.delete_folder(folder).catch(() => {}); // fine if it was never created

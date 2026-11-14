@@ -93,8 +93,16 @@ export async function textProofLink(g: GalleryContact, url: string, expiresAt: D
 export async function textFinalLink(g: GalleryContact, url: string, expiresAt: Date) {
   await trySend(
     [g.clientPhone],
-    `Hi ${g.clientName.split(" ")[0]}, your edited B.Marvld photos are ready to view and download: ${url} ` +
-      `(available until ${formatDate(expiresAt)}). ...be marveled`
+    `Hi ${g.clientName.split(" ")[0]}, your edited B.Marvld photos are ready: ${url} ` +
+      `Please download them by ${formatDate(expiresAt)}, when they're removed from our gallery. ...be marveled`
+  );
+}
+
+export async function textDeletionReminder(g: GalleryContact, url: string, expiresAt: Date) {
+  await trySend(
+    [g.clientPhone],
+    `Hi ${g.clientName.split(" ")[0]}, a reminder from B.Marvld: your photos are removed from our gallery on ` +
+      `${formatDate(expiresAt)}. If you haven't yet, download them now: ${url}`
   );
 }
 

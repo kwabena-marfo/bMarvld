@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftIcon, CopyIcon, DownloadIcon, HeartIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import { ArrowLeftIcon, CopyIcon, DownloadIcon, HeartIcon, StarIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -22,7 +22,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { galleryStatusLabels, type GalleryStatus } from "@/data/clientGalleries";
+import { DELIVERY_DAYS, galleryStatusLabels, type GalleryStatus } from "@/data/clientGalleries";
 import { adminFetch } from "@/lib/admin-api";
 import { uploadClientPhoto, type PhotoKind } from "@/lib/clientUpload";
 import { formatDate } from "@/lib/formatDate";
@@ -46,6 +46,9 @@ type Gallery = {
   finals: Photo[];
   finalLink?: ShareInfo;
   deliveredAt?: string;
+  featured: string[]; // edits the client starred for the site
+  clearedAt?: string; // the delivery link closed and the photos were deleted
+  clearedPicks: string[];
 };
 
 
@@ -126,6 +129,10 @@ export default function ClientGalleryAdmin() {
                 <AlertDialogDescription>
                   All its proofs and edited photos are deleted from Cloudinary and both links stop working. This
                   can&apos;t be undone.
+                  {gallery.featured.length > 0 &&
+                    (gallery.featured.length === 1
+                      ? " The photo they featured stays on the site (manage it in Favourites)."
+                      : ` The ${gallery.featured.length} photos they featured stay on the site (manage them in Favourites).`)}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
@@ -138,6 +145,26 @@ export default function ClientGalleryAdmin() {
           </AlertDialog>
         </div>
       </div>
+
+      {gallery.clearedAt && (
+        <div className="mb-10 border border-cream/20 bg-ink-soft p-5 text-sm">
+          <p>
+            Photos cleared on {formatDate(new Date(gallery.clearedAt))}. The delivery link closed, so this
+            gallery&apos;s proofs and edits were deleted from Cloudinary.
+            {gallery.featured.length > 0 && " The photos the client featured are still on the site."}
+          </p>
+          {gallery.clearedPicks.length > 0 && (
+            <>
+              <p className="mt-3 text-xs tracking-[0.2em] text-cream-dim uppercase">
+                They had picked ({gallery.clearedPicks.length})
+              </p>
+              <pre className="mt-2 max-h-40 overflow-auto text-xs leading-relaxed text-cream-dim select-all">
+                {gallery.clearedPicks.join("\n")}
+              </pre>
+            </>
+          )}
+        </div>
+      )}
 
       <Step n={1} title="Proofs" hint="Upload the shoot at full size (up to 10 MB a photo). The client only ever sees smaller, watermarked copies.">
         <Uploader galleryId={id} kind="proofs" label="Upload proofs" onDone={load} />
@@ -219,16 +246,36 @@ export default function ClientGalleryAdmin() {
       <Step n={3} title="Edited photos" hint="Upload the finished edits at full size. The client gets them without a watermark.">
         <Uploader galleryId={id} kind="finals" label="Upload edited photos" onDone={load} />
         <div className="mt-6">
-          <PhotoGrid galleryId={id} kind="finals" photos={gallery.finals} onRemoved={load} />
+          {gallery.featured.length > 0 && (
+            <p className="mb-3 text-sm text-cream-dim">
+              <StarIcon className="mr-1 mb-0.5 inline size-4 fill-gold text-gold" />
+              {gallery.clientName} featured {gallery.featured.length} on the site&apos;s{" "}
+              <Link href="/admin/favourites" className="text-cream underline-offset-4 hover:underline">
+                Client favourites
+              </Link>
+              .
+            </p>
+          )}
+          <PhotoGrid
+            galleryId={id}
+            kind="finals"
+            photos={gallery.finals}
+            selected={new Set(gallery.featured)}
+            onRemoved={load}
+          />
         </div>
       </Step>
 
-      <Step n={4} title="Deliver" hint="Sends the client a link to view and download their edited photos.">
+      <Step
+        n={4}
+        title="Deliver"
+        hint="Sends the client a link to view and download their edited photos. When it closes, this gallery's proofs and edits are deleted from Cloudinary. The client gets a reminder a day before, and photos they featured on the site stay. Extend the link to give them longer."
+      >
         <ShareLink
           galleryId={id}
           kind="final"
           link={gallery.finalLink}
-          defaultDays={30}
+          defaultDays={DELIVERY_DAYS}
           disabled={!gallery.finals.length}
           disabledHint="Upload the edited photos first."
           onShared={load}
@@ -376,9 +423,13 @@ function PhotoGrid({
                 unoptimized
                 className="aspect-square w-full object-cover"
               />
-              {isPicked && (
-                <HeartIcon className="absolute top-2 left-2 size-5 fill-gold text-gold drop-shadow" aria-label="Picked" />
-              )}
+              {/* Proofs: the client picked it. Edits: they featured it on the site. */}
+              {isPicked &&
+                (kind === "proofs" ? (
+                  <HeartIcon className="absolute top-2 left-2 size-5 fill-gold text-gold drop-shadow" aria-label="Picked" />
+                ) : (
+                  <StarIcon className="absolute top-2 left-2 size-5 fill-gold text-gold drop-shadow" aria-label="Featured" />
+                ))}
               <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-linear-to-t from-ink/90 p-1 pl-2 text-[10px] text-cream-dim">
                 <span className="truncate">{p.name}</span>
                 <Button
