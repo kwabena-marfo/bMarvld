@@ -96,13 +96,15 @@ export function privateDownloadUrl(publicId: string, filename: string) {
   return cloudinary.url(publicId, { type: "authenticated", sign_url: true, flags: `attachment:${name}` });
 }
 
-// A short-lived link that has Cloudinary zip the originals up on the fly.
+// A short-lived link that has Cloudinary zip the originals up on the fly. Files
+// keep the names they were uploaded with (IMG_4021.jpg), not their random ids.
 export function privateZipUrl(publicIds: string[], name: string) {
   return cloudinary.utils.download_zip_url({
     public_ids: publicIds,
     resource_type: "image",
     type: "authenticated",
     flatten_folders: true,
+    use_original_filename: true,
     target_public_id: name.replace(/[^\w\- ]+/g, "_"),
     expires_at: Math.round(Date.now() / 1000) + 60 * 60,
   });

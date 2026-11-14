@@ -7,6 +7,17 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -146,9 +157,23 @@ export default function DatesAdmin() {
             ) : (
               <div className="flex items-center gap-3">
                 <Badge variant="outline">Blocked</Badge>
-                <Button variant="link" size="sm" onClick={() => unblock(l._id)} className="px-0 text-cream-dim">
-                  Unblock
-                </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger render={<Button variant="link" size="sm" className="px-0 text-cream-dim" />}>
+                    Unblock
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Unblock {pretty(l._id)}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Clients will be able to book this day on the site again.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={() => unblock(l._id)}>Unblock</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             )}
           </li>

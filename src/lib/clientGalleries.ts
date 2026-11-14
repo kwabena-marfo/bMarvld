@@ -309,4 +309,17 @@ export async function finalPublicIds(token: string) {
   return { title: `B.Marvld - ${g.title}`, publicIds: g.finals.map((p) => p.publicId) };
 }
 
+/** The proofs the client picked, for the admin to download without the watermark. */
+export async function pickedPublicIds(id: string) {
+  const _id = oid(id);
+  if (!_id) return null;
+  const g = await (await galleries()).findOne({ _id });
+  if (!g) return null;
+  const selected = new Set(g.selected);
+  return {
+    title: `${g.clientName} - picks`,
+    publicIds: g.proofs.filter((p) => selected.has(p.id)).map((p) => p.publicId),
+  };
+}
+
 export type GalleryContact = Pick<GalleryDoc, "clientName" | "clientPhone" | "clientEmail" | "title">;

@@ -17,6 +17,7 @@ import {
   finalPublicIds,
   getGalleryForAdmin,
   listGalleries,
+  pickedPublicIds,
   removePhoto as removeClientPhoto,
   reopenSelection,
   setProofSelected,
@@ -381,6 +382,14 @@ admin.post("/clients/:id/share/:link", async (c) => {
 admin.post("/clients/:id/reopen", async (c) => {
   if (!(await reopenSelection(c.req.param("id")))) return c.json({ error: "Gallery not found" }, 404);
   return c.json({ ok: true });
+});
+
+// The client's picks as a zip of the clean (unwatermarked) proofs.
+admin.get("/clients/:id/picks/zip", async (c) => {
+  const picks = await pickedPublicIds(c.req.param("id"));
+  if (!picks) return c.json({ error: "Gallery not found" }, 404);
+  if (!picks.publicIds.length) return c.json({ error: "The client hasn't picked any photos yet" }, 400);
+  return c.redirect(privateZipUrl(picks.publicIds, picks.title));
 });
 
 app.route("/admin", admin);

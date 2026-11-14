@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeftIcon, CopyIcon, HeartIcon, Trash2Icon, UploadIcon } from "lucide-react";
+import { ArrowLeftIcon, CopyIcon, DownloadIcon, HeartIcon, Trash2Icon, UploadIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
@@ -18,7 +18,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -139,7 +139,7 @@ export default function ClientGalleryAdmin() {
         </div>
       </div>
 
-      <Step n={1} title="Proofs" hint="Upload the shoot. They're shrunk for previewing, and the client only ever sees them watermarked.">
+      <Step n={1} title="Proofs" hint="Upload the shoot at full size (up to 10 MB a photo). The client only ever sees smaller, watermarked copies.">
         <Uploader galleryId={id} kind="proofs" label="Upload proofs" onDone={load} />
         {gallery.proofs.length > 0 && (
           <div className="mt-6 mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-cream-dim">
@@ -196,10 +196,19 @@ export default function ClientGalleryAdmin() {
           <div className="mt-8">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <p className="text-xs tracking-[0.2em] text-cream-dim uppercase">Files to edit ({picked.length})</p>
-              <Button variant="outline" size="sm" onClick={copyNames}>
-                <CopyIcon /> Copy file names
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={copyNames}>
+                  <CopyIcon /> Copy file names
+                </Button>
+                {/* A plain link: the API redirects to a zip Cloudinary builds, which downloads directly. */}
+                <a href={`/api/admin/clients/${id}/picks/zip`} className={buttonVariants({ size: "sm" })}>
+                  <DownloadIcon /> Download picks
+                </a>
+              </div>
             </div>
+            <p className="mb-3 text-xs text-cream-dim">
+              The download is full size, with no watermark, and keeps your file names.
+            </p>
             <pre className="max-h-48 overflow-auto border border-cream/10 bg-ink-soft p-4 text-xs leading-relaxed text-cream-dim select-all">
               {picked.map((p) => p.name).join("\n")}
             </pre>
@@ -317,9 +326,13 @@ function PhotoGrid({
   onRemoved: () => void;
   empty?: string;
 }) {
+  // One confirm dialog for the whole grid, opened for the photo being deleted.
+  const [confirming, setConfirming] = useState<Photo | null>(null);
+
   async function remove(photo: Photo) {
     try {
       await sendJson(`/api/admin/clients/${galleryId}/${kind}/${photo.id}`, undefined, "DELETE");
+      toast.success(`${photo.name} deleted`);
       onRemoved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Delete failed");
@@ -329,38 +342,61 @@ function PhotoGrid({
   if (!photos.length) return empty ? <p className="text-sm text-cream-dim">{empty}</p> : null;
 
   return (
-    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-      {photos.map((p) => {
-        const isPicked = selected?.has(p.id);
-        return (
-          <figure key={p.id} className={cn("group relative bg-ink-soft", isPicked && "ring-2 ring-gold")}>
-            <Image
-              src={p.src}
-              alt={p.name}
-              width={p.width}
-              height={p.height}
-              unoptimized
-              className="aspect-square w-full object-cover"
-            />
-            {isPicked && (
-              <HeartIcon className="absolute top-2 left-2 size-5 fill-gold text-gold drop-shadow" aria-label="Picked" />
-            )}
-            <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-linear-to-t from-ink/90 p-1 pl-2 text-[10px] text-cream-dim">
-              <span className="truncate">{p.name}</span>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Delete ${p.name}`}
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                onClick={() => remove(p)}
-              >
-                <Trash2Icon className="text-destructive" />
-              </Button>
-            </figcaption>
-          </figure>
-        );
-      })}
-    </div>
+    <>
+      <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {confirming?.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {kind === "proofs"
+                ? confirming && selected?.has(confirming.id)
+                  ? "The client picked this photo. It's removed from their selection and from Cloudinary. This can't be undone."
+                  : "It's removed from the client's gallery and from Cloudinary. This can't be undone."
+                : "The client won't see or be able to download this edit any more. It's removed from Cloudinary and can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => confirming && remove(confirming)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
+        {photos.map((p) => {
+          const isPicked = selected?.has(p.id);
+          return (
+            <figure key={p.id} className={cn("group relative bg-ink-soft", isPicked && "ring-2 ring-gold")}>
+              <Image
+                src={p.src}
+                alt={p.name}
+                width={p.width}
+                height={p.height}
+                unoptimized
+                className="aspect-square w-full object-cover"
+              />
+              {isPicked && (
+                <HeartIcon className="absolute top-2 left-2 size-5 fill-gold text-gold drop-shadow" aria-label="Picked" />
+              )}
+              <figcaption className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-1 bg-linear-to-t from-ink/90 p-1 pl-2 text-[10px] text-cream-dim">
+                <span className="truncate">{p.name}</span>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Delete ${p.name}`}
+                  // Shows on hover with a mouse; always visible on touch screens, which can't hover.
+                  className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100"
+                  onClick={() => setConfirming(p)}
+                >
+                  <Trash2Icon className="text-destructive" />
+                </Button>
+              </figcaption>
+            </figure>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
