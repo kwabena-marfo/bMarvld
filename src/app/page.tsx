@@ -89,7 +89,7 @@ export default function Home() {
                 <Logo tagline className="text-3xl sm:text-5xl md:text-6xl" />
               </h1>
               <p className="mx-auto mt-5 max-w-md text-sm text-cream-dim">
-                Studio portraits, fashion, kids and milestone moments — captured so you can be marveled, again and again.
+                Studio portraits, fashion, kids and milestone moments, captured so you can be marveled, again and again.
               </p>
               <div className="mt-7 flex flex-wrap justify-center gap-3">
                 <a href="#book" className={buttonVariants({ size: "lg" })}>
@@ -139,10 +139,10 @@ export default function Home() {
               <p className="mt-6 leading-relaxed">
                 I&apos;m a photographer who believes every frame should make you stop and stare. From bold studio
                 portraits and tailored fashion looks to kids&apos; shoots and graduation days, I chase light, styling
-                and honest emotion — the details that turn a photo into an heirloom.
+                and honest emotion: the details that turn a photo into an heirloom.
               </p>
               <p className="mt-4 leading-relaxed">
-                Every session is relaxed, directed and tailored to you — so all you have to do is show up and be
+                Every session is relaxed, directed and tailored to you, so all you have to do is show up and be
                 yourself. I&apos;ll take care of the rest.
               </p>
               <a

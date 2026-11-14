@@ -98,14 +98,14 @@ app.post("/bookings", async (c) => {
       ? c.json(
           {
             error: "That date is no longer available",
-            fieldErrors: { date: "That date is no longer available — try another" },
+            fieldErrors: { date: "That date is no longer available. Try another" },
           },
           409
         )
       : c.json(
           {
             error: "That package is no longer available",
-            fieldErrors: { packageId: "That package is no longer available — choose another" },
+            fieldErrors: { packageId: "That package is no longer available. Choose another" },
           },
           409
         );
@@ -406,7 +406,7 @@ app.post("/proofs/:token/select", async (c) => {
 
 app.post("/proofs/:token/submit", async (c) => {
   const g = await submitSelection(c.req.param("token"));
-  if (!g) return c.json({ error: "Choose at least one photo first — or this link has closed" }, 409);
+  if (!g) return c.json({ error: "Choose at least one photo first. If you have, this link has closed" }, 409);
   const adminUrl = `${appUrl(c)}/admin/clients/${g.id}`;
   await Promise.all([textSelectionSubmitted(g, adminUrl), emailSelectionSubmitted(g, adminUrl)]);
   return c.json({ ok: true });

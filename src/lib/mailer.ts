@@ -80,7 +80,7 @@ async function trySend(mail: SendMailOptions) {
   const to = [mail.to].flat().filter(Boolean);
   if (!to.length) return;
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn("SMTP not configured — skipping email:", mail.subject);
+    console.warn("SMTP not configured, skipping email:", mail.subject);
     return;
   }
   try {

@@ -51,7 +51,7 @@ export async function sendLoginCode(email: string): Promise<SendCodeResult> {
   const codes = await codesCollection();
   const existing = await codes.findOne({ _id: email });
   if (existing && Date.now() - existing.sentAt.getTime() < RESEND_SECONDS * 1000) {
-    return { ok: false, error: "A code was just sent — wait a minute before requesting another", status: 429 };
+    return { ok: false, error: "A code was just sent. Wait a minute before requesting another", status: 429 };
   }
 
   const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, "0");

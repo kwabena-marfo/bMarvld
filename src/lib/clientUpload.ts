@@ -29,7 +29,7 @@ async function shrink(file: File) {
 export async function uploadClientPhoto(galleryId: string, kind: PhotoKind, file: File) {
   const tooBig = file.size > MAX_BYTES;
   if (tooBig && kind === "finals") {
-    throw new Error(`${(file.size / 1024 / 1024).toFixed(1)} MB — export it under 10 MB`);
+    throw new Error(`${(file.size / 1024 / 1024).toFixed(1)} MB is over the 10 MB limit. Export it smaller`);
   }
   const base = `/api/admin/clients/${galleryId}/${kind}`;
   const [sig, body] = await Promise.all([sendJson<Signature>(`${base}/sign`), tooBig ? shrink(file) : file]);

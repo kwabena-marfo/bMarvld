@@ -150,7 +150,7 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
           // hold would block it.
           await sendJson(`/api/bookings/${encodeURIComponent(checkout.reference)}/cancel`).catch(() => {});
           loadAvailability();
-          setError("Payment cancelled — your date isn't reserved yet. You can try again whenever you're ready.");
+          setError("Payment cancelled. Your date isn't reserved yet. You can try again whenever you're ready.");
           resolve();
         },
       });
@@ -160,7 +160,7 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
   if (!packages.length) {
     return (
       <p className="text-center text-cream-dim">
-        Bookings are closed for now — check back soon or reach out on Instagram.
+        Bookings are closed for now. Check back soon or reach out on Instagram.
       </p>
     );
   }
@@ -327,7 +327,10 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
             <p className="font-display text-2xl">{pkg.name}</p>
             <ul className="mt-4 space-y-1 text-sm text-cream-dim">
               {pkg.features.map((f) => (
-                <li key={f}>— {f}</li>
+                <li key={f} className="flex gap-2">
+                  <span aria-hidden className="text-gold">•</span>
+                  {f}
+                </li>
               ))}
             </ul>
             <dl className="mt-6 space-y-2 border-t border-cream/10 pt-6 text-sm">

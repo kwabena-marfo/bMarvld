@@ -35,7 +35,7 @@ async function Proofs({ params }: Pick<PageProps<"/proofs/[token]">, "params">) 
     <>
       <GalleryHeading eyebrow={gallery.title} title={`Hi ${gallery.clientName.split(" ")[0]}, choose your photos`}>
         Tap the heart on {pick}, then send your selection and we&apos;ll edit them for you. These previews carry a
-        watermark — your edited photos won&apos;t. Open until {formatDate(gallery.expiresAt)}.
+        watermark, but your edited photos won&apos;t. Open until {formatDate(gallery.expiresAt)}.
       </GalleryHeading>
       <ProofSelector
         token={token}

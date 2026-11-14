@@ -4,6 +4,6 @@ export type GalleryStatus = "new" | "selecting" | "submitted" | "delivered";
 export const galleryStatusLabels: Record<GalleryStatus, string> = {
   new: "Uploading proofs",
   selecting: "Client choosing",
-  submitted: "Selection in — edit",
+  submitted: "Picks in, ready to edit",
   delivered: "Delivered",
 };

@@ -157,7 +157,7 @@ function NewGalleryForm() {
               <SelectContent>
                 {bookings.map((b) => (
                   <SelectItem key={b.reference} value={b.reference}>
-                    {b.name} — {b.packageName}, {formatDate(b.date)}
+                    {b.name} · {b.packageName}, {formatDate(b.date)}
                   </SelectItem>
                 ))}
               </SelectContent>

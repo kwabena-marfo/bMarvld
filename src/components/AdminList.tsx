@@ -140,7 +140,7 @@ function pageNumbers(page: number, pageCount: number) {
   return out;
 }
 
-/** "21–40 of 87 bookings" plus previous / page numbers / next. */
+/** "21 to 40 of 87 bookings" plus previous / page numbers / next. */
 export function ListPagination({
   page,
   pageSize,
@@ -174,7 +174,7 @@ export function ListPagination({
       aria-label="Pages"
       className="mt-6 mb-16 flex flex-wrap items-center justify-between gap-3 text-sm text-cream-dim"
     >
-      <p>{pageCount > 1 ? `${first}–${last} of ${total} ${label}` : `${total} ${label}`}</p>
+      <p>{pageCount > 1 ? `${first} to ${last} of ${total} ${label}` : `${total} ${label}`}</p>
       {pageCount > 1 && (
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" disabled={current === 1} onClick={() => onPage(current - 1)} aria-label="Previous page">

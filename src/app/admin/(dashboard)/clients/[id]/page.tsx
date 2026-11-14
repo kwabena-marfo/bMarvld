@@ -95,7 +95,7 @@ export default function ClientGalleryAdmin() {
     navigator.clipboard
       .writeText(picked.map((p) => p.name).join("\n"))
       .then(() => toast.success(`${picked.length} file names copied`))
-      .catch(() => toast.error("Couldn't copy — select the list below instead"));
+      .catch(() => toast.error("Couldn't copy. Select the list below instead"));
   }
 
   return (

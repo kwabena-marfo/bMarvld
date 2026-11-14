@@ -126,7 +126,7 @@ export default function PackagesAdmin() {
       <ListSearch value={list.q} onSearch={list.setQuery} placeholder="Search packages…" className="mb-6" />
 
       {!packages && <p className="text-cream-dim">Loading…</p>}
-      {found?.length === 0 && <EmptyList q={list.q} empty="No packages yet — add your first one." noun="packages" />}
+      {found?.length === 0 && <EmptyList q={list.q} empty="No packages yet. Add your first one." noun="packages" />}
 
       <div className="grid gap-3">
         {shown?.items.map((p, n) => {

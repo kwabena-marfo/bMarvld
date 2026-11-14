@@ -12,7 +12,7 @@ const SENDER = process.env.MNOTIFY_SENDER_ID || "BMarvld";
 
 export async function sendSMS(recipients: string[], message: string) {
   if (!process.env.MNOTIFY_KEY) {
-    console.warn("MNOTIFY_KEY not set — skipping SMS:", message);
+    console.warn("MNOTIFY_KEY not set, skipping SMS:", message);
     return;
   }
   const { data } = await axios.post(`${ENDPOINT}?key=${process.env.MNOTIFY_KEY}`, {

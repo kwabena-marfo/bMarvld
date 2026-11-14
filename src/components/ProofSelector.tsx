@@ -51,7 +51,7 @@ export default function ProofSelector({
       if (submitted) return;
       const select = !selected.has(id);
       if (select && full) {
-        setError(`You've chosen ${maxSelections} — unselect one to swap it.`);
+        setError(`You've chosen ${maxSelections}. Unselect one to swap it.`);
         return;
       }
       setError("");
@@ -67,7 +67,7 @@ export default function ProofSelector({
         setSelected(new Set(saved));
       } catch (e) {
         setSelected(selected);
-        setError(e instanceof Error ? e.message : "Couldn't save that — check your connection and try again.");
+        setError(e instanceof Error ? e.message : "Couldn't save that. Check your connection and try again.");
       }
     },
     [selected, submitted, full, maxSelections, token]
@@ -82,7 +82,7 @@ export default function ProofSelector({
       setPickedOnly(true);
       setOpen(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't send your selection — try again.");
+      setError(e instanceof Error ? e.message : "Couldn't send your selection. Please try again.");
     } finally {
       setSending(false);
     }
@@ -118,7 +118,7 @@ export default function ProofSelector({
     <>
       {submitted && (
         <div className="mb-8 border border-gold/40 bg-gold/5 p-5 text-center">
-          <p className="font-display text-2xl">Thank you — your selection is in!</p>
+          <p className="font-display text-2xl">Thank you, your selection is in!</p>
           <p className="mt-2 text-sm text-cream-dim">
             B.Marvld is editing your {selected.size} photos. You&apos;ll get a link to your finished photos as soon as
             they&apos;re ready.
@@ -177,7 +177,7 @@ export default function ProofSelector({
               {error ? (
                 <p className="text-sm text-destructive">{error}</p>
               ) : (
-                <p className="text-xs text-cream-dim">Your choices save as you go — come back any time before you send.</p>
+                <p className="text-xs text-cream-dim">Your choices save as you go, so you can come back any time before you send.</p>
               )}
             </div>
             <AlertDialog>

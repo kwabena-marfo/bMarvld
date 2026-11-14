@@ -19,7 +19,7 @@ export async function PackagesGrid() {
   const packages = await getSitePackages();
 
   if (!packages.length) {
-    return <p className="text-center text-cream-dim">New packages are on the way — check back soon.</p>;
+    return <p className="text-center text-cream-dim">New packages are on the way. Check back soon.</p>;
   }
 
   return (
@@ -33,7 +33,10 @@ export async function PackagesGrid() {
             <p className="mt-1 text-xs text-cream-dim">{p.depositPercent}% deposit to book</p>
             <ul className="mt-6 flex-1 space-y-2 text-sm text-cream-dim">
               {p.features.map((f) => (
-                <li key={f}>— {f}</li>
+                <li key={f} className="flex gap-2">
+                  <span aria-hidden className="text-gold">•</span>
+                  {f}
+                </li>
               ))}
             </ul>
             <PickPackageButton packageId={p.id} />

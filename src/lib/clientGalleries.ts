@@ -267,7 +267,7 @@ export async function setProofSelected(token: string, photoId: string, selected:
     { returnDocument: "after" }
   );
   if (!updated) {
-    return { ok: false, error: `You can choose up to ${g.maxSelections} photos — unselect one to swap it` };
+    return { ok: false, error: `You can choose up to ${g.maxSelections} photos. Unselect one to swap it` };
   }
   return { ok: true, selected: updated.selected };
 }
@@ -306,7 +306,7 @@ export async function getFinalGallery(token: string) {
 export async function finalPublicIds(token: string) {
   const g = await (await galleries()).findOne({ "finalLink.token": token });
   if (!g || !isLive(g.finalLink)) return null;
-  return { title: `B.Marvld - ${g.title}`, publicIds: g.finals.map((p) => p.publicId) };
+  return { title: `B.Marvld ${g.title}`, publicIds: g.finals.map((p) => p.publicId) };
 }
 
 /** The proofs the client picked, for the admin to download without the watermark. */
@@ -317,7 +317,7 @@ export async function pickedPublicIds(id: string) {
   if (!g) return null;
   const selected = new Set(g.selected);
   return {
-    title: `${g.clientName} - picks`,
+    title: `${g.clientName} picks`,
     publicIds: g.proofs.filter((p) => selected.has(p.id)).map((p) => p.publicId),
   };
 }
