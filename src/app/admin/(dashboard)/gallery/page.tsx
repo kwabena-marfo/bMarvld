@@ -202,7 +202,7 @@ export default function GalleryAdmin() {
       {found?.length === 0 && (
         <EmptyList
           q={list.q}
-          empty="No uploads yet. The site is showing the bundled portfolio until you add some."
+          empty="No uploads yet. Selected work on the site stays empty until you add some."
           noun="photos"
         />
       )}

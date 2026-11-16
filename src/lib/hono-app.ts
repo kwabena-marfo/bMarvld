@@ -35,7 +35,7 @@ import {
 } from "./clientGalleries";
 import { emailDeletionReminder, emailFinalLink, emailProofLink, emailSelectionSubmitted } from "./mailer";
 import { textDeletionReminder, textFinalLink, textProofLink, textSelectionSubmitted } from "./sms";
-import { abandonBooking, cancelPendingBooking, confirmBooking, createBooking, listBookings } from "./bookings";
+import { abandonBooking, cancelPendingBooking, confirmBooking, createBooking, deleteBooking, listBookings } from "./bookings";
 import { blockDate, unavailableDates, unblockDate, upcomingLocks } from "./dateLocks";
 import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } from "./paystack";
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
@@ -206,6 +206,11 @@ const admin = new Hono<{ Variables: { adminEmail: string } }>();
 admin.use(requireAdmin);
 
 admin.get("/me", (c) => c.json({ email: c.get("adminEmail") }));
+
+admin.delete("/bookings/:reference", async (c) => {
+  if (!(await deleteBooking(c.req.param("reference")))) return c.json({ error: "Booking not found" }, 404);
+  return c.json({ ok: true });
+});
 
 // ?q= search, ?page= / ?pageSize= paging, ?all=1 to include unpaid and failed.
 admin.get("/bookings", async (c) => {

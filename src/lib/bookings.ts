@@ -3,7 +3,7 @@ import type { Filter } from "mongodb";
 import { getDb } from "./mongodb";
 import { searchFilter, type PageParams } from "./listQuery";
 import { verifyTransaction } from "./paystack";
-import { bookDate, holdDate, releaseHold } from "./dateLocks";
+import { bookDate, holdDate, releaseBookingDate, releaseHold } from "./dateLocks";
 import { notifyBookingClash, notifyBookingConfirmed } from "./sms";
 import { emailBookingClash, emailBookingConfirmed } from "./mailer";
 import { findActivePackage } from "./packages";
@@ -133,6 +133,15 @@ export async function abandonBooking(reference: string) {
     return collection.findOne({ reference });
   }
   return booking;
+}
+
+/** Removes a booking from the admin and frees its date. Paystack payments aren't touched. */
+export async function deleteBooking(reference: string) {
+  const collection = await bookingsCollection();
+  const booking = await collection.findOneAndDelete({ reference });
+  if (!booking) return false;
+  await releaseBookingDate(booking.date, reference);
+  return true;
 }
 
 const searchableFields = ["name", "phone", "email", "reference", "packageName", "date", "location", "notes"];

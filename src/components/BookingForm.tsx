@@ -180,22 +180,30 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
               </FieldLegend>
               <div role="radiogroup" className="grid gap-3 sm:grid-cols-2">
                 {packages.map((p) => (
-                  <button
-                    type="button"
-                    role="radio"
-                    aria-checked={p.id === field.value}
-                    key={p.id}
-                    onClick={() => field.onChange(p.id)}
-                    className={cn(
-                      "border p-4 text-left transition",
-                      p.id === field.value ? "border-gold bg-gold/10" : "border-cream/20 hover:border-cream/50"
-                    )}
-                  >
-                    <span className="block font-display text-lg">{p.name}</span>
-                    <span className="text-sm text-cream-dim">
-                      {formatCedis(p.price)} · {p.duration}
-                    </span>
-                  </button>
+                  <div key={p.id} className="relative">
+                    <button
+                      type="button"
+                      role="radio"
+                      aria-checked={p.id === field.value}
+                      onClick={() => field.onChange(p.id)}
+                      className={cn(
+                        "h-full w-full border p-4 pb-10 text-left transition",
+                        p.id === field.value ? "border-gold bg-gold/10" : "border-cream/20 hover:border-cream/50"
+                      )}
+                    >
+                      <span className="block font-display text-lg">{p.name}</span>
+                      <span className="text-sm text-cream-dim">
+                        {formatCedis(p.price)} · {p.duration}
+                      </span>
+                    </button>
+                    {/* Up to this package's card in the Packages section, which lights up as the one in view. */}
+                    <a
+                      href={`#package-${p.id}`}
+                      className="absolute bottom-3 left-4 text-xs tracking-[0.15em] text-cream-dim uppercase underline-offset-4 hover:text-gold hover:underline"
+                    >
+                      View details
+                    </a>
+                  </div>
                 ))}
               </div>
               <FieldError errors={[fieldState.error]} />
@@ -210,7 +218,8 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid}>
                 <FieldLabel htmlFor="book-name">Full name</FieldLabel>
-                <Input {...field} id="book-name" autoComplete="name" aria-invalid={fieldState.invalid} />
+                {/* scroll-mt: "Book this" scrolls here, leaving room for the header and the label. */}
+                <Input {...field} id="book-name" autoComplete="name" aria-invalid={fieldState.invalid} className="scroll-mt-40" />
                 <FieldError errors={[fieldState.error]} />
               </Field>
             )}

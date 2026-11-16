@@ -1,17 +1,19 @@
 import { connection } from "next/server";
 import Gallery from "./Gallery";
-import { portfolio } from "@/data/gallery";
 import { listPhotos } from "@/lib/photos";
 
-// Read fresh on every visit so uploads from /admin/gallery show immediately,
-// newest first, ahead of the bundled portfolio.
+// The portfolio is whatever's uploaded in /admin/gallery, newest first. Read
+// fresh on every visit, so uploads and deletions show immediately.
 export default async function GallerySection() {
   await connection();
   const photos = await listPhotos().catch((err) => {
     console.error("Could not load gallery:", err);
     return [];
   });
-  return <Gallery shots={[...photos, ...portfolio]} />;
+  if (!photos.length) {
+    return <p className="text-center text-cream-dim">New work is on the way. Check back soon.</p>;
+  }
+  return <Gallery shots={photos} />;
 }
 
 export function GallerySkeleton() {

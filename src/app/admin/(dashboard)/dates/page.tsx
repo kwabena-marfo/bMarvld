@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -85,6 +85,16 @@ export default function DatesAdmin() {
     }
   }
 
+  async function deleteBooking(lock: Lock) {
+    try {
+      await sendJson(`/api/admin/bookings/${encodeURIComponent(lock.reference)}`, undefined, "DELETE");
+      toast.success(`Booking deleted. ${pretty(lock._id)} is open again`);
+      load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete the booking");
+    }
+  }
+
   const taken = new Set(locks?.map((l) => l._id));
   const list = useListParams();
   const found = locks?.filter((l) =>
@@ -153,7 +163,32 @@ export default function DatesAdmin() {
           <li key={l._id} className="flex items-center justify-between gap-4 py-3">
             <span>{pretty(l._id)}</span>
             {l.kind === "booked" ? (
-              <Badge>Booked · {l.reference}</Badge>
+              <div className="flex items-center gap-2">
+                <Badge>Booked · {l.reference}</Badge>
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={<Button variant="ghost" size="icon-sm" aria-label={`Delete the booking on ${pretty(l._id)}`} />}
+                  >
+                    <Trash2Icon className="text-destructive" />
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete the booking on {pretty(l._id)}?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Booking {l.reference} is deleted and the day opens up for booking again. The deposit
+                        isn&apos;t refunded automatically; refund it from your Paystack dashboard if you need to.
+                        This can&apos;t be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction variant="destructive" onClick={() => deleteBooking(l)}>
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
             ) : (
               <div className="flex items-center gap-3">
                 <Badge variant="outline">Blocked</Badge>

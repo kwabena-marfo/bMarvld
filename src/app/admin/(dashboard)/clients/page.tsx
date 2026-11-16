@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -9,6 +9,16 @@ import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 import type { z } from "zod";
 import { EmptyList, ListPagination, ListSearch, useAdminList, useListParams } from "@/components/AdminList";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -40,8 +50,21 @@ export default function ClientsAdmin() {
   const [creating, setCreating] = useState(false);
   const list = useListParams();
   const { q, page } = list;
-  const { data, error, loading } = useAdminList<GalleryList>(`/clients?${new URLSearchParams({ q, page: String(page) })}`);
+  const { data, error, loading, reload } = useAdminList<GalleryList>(
+    `/clients?${new URLSearchParams({ q, page: String(page) })}`
+  );
   const galleries = data?.galleries;
+  const [confirming, setConfirming] = useState<GallerySummary | null>(null);
+
+  async function remove(g: GallerySummary) {
+    try {
+      await sendJson(`/api/admin/clients/${g.id}`, undefined, "DELETE");
+      toast.success(`${g.clientName}'s gallery deleted`);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Delete failed");
+    }
+  }
 
   return (
     <>
@@ -65,26 +88,54 @@ export default function ClientsAdmin() {
 
       <div className={cn("grid gap-3 transition-opacity", loading && data && "opacity-50")}>
         {galleries?.map((g) => (
-          <Link
-            key={g.id}
-            href={`/admin/clients/${g.id}`}
-            className="grid gap-2 border border-cream/15 p-5 transition hover:border-gold/60 sm:grid-cols-[1fr_auto] sm:items-center"
-          >
-            <div>
-              <p className="font-display text-xl">{g.clientName}</p>
-              <p className="text-sm text-cream-dim">{g.title}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-cream-dim">
-              <span>
-                {g.proofs} proofs · {g.selected} picked · {g.finals} edited
-              </span>
-              <Badge variant={g.status === "submitted" ? "default" : "outline"} className="tracking-wider uppercase">
-                {galleryStatusLabels[g.status]}
-              </Badge>
-            </div>
-          </Link>
+          <div key={g.id} className="flex items-center border border-cream/15 transition hover:border-gold/60">
+            <Link
+              href={`/admin/clients/${g.id}`}
+              className="grid flex-1 gap-2 p-5 sm:grid-cols-[1fr_auto] sm:items-center"
+            >
+              <div>
+                <p className="font-display text-xl">{g.clientName}</p>
+                <p className="text-sm text-cream-dim">{g.title}</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 text-sm text-cream-dim">
+                <span>
+                  {g.proofs} proofs · {g.selected} picked · {g.finals} edited
+                </span>
+                <Badge variant={g.status === "submitted" ? "default" : "outline"} className="tracking-wider uppercase">
+                  {galleryStatusLabels[g.status]}
+                </Badge>
+              </div>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="mr-3"
+              aria-label={`Delete ${g.clientName}'s gallery`}
+              onClick={() => setConfirming(g)}
+            >
+              <Trash2Icon className="text-destructive" />
+            </Button>
+          </div>
         ))}
       </div>
+
+      <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {confirming?.clientName}&apos;s gallery?</AlertDialogTitle>
+            <AlertDialogDescription>
+              All its proofs and edited photos are deleted from Cloudinary and both links stop working. Photos they
+              featured on the site stay (manage them in Favourites). This can&apos;t be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => confirming && remove(confirming)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {data && (
         <ListPagination

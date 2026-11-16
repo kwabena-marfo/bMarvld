@@ -26,7 +26,12 @@ export async function PackagesGrid() {
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {packages.map((p) => (
-          <div key={p.id} className="flex flex-col border border-cream/15 bg-ink/70 p-6 backdrop-blur-sm transition hover:border-cream/40">
+          // "View details" in the booking form links here: the card in view gets a gold border.
+          <div
+            key={p.id}
+            id={`package-${p.id}`}
+            className="flex scroll-mt-28 flex-col border border-cream/15 bg-ink/70 p-6 backdrop-blur-sm transition hover:border-cream/40 target:border-gold target:bg-gold/5 target:shadow-[0_0_0_1px_var(--color-gold)]"
+          >
             <h3 className="font-display text-2xl">{p.name}</h3>
             <p className="mt-1 text-xs tracking-[0.2em] text-cream-dim uppercase">{p.duration}</p>
             <p className="mt-6 font-display text-3xl text-gold">{formatCedis(p.price)}</p>

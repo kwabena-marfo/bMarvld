@@ -82,6 +82,13 @@ export async function releaseHold(date: string, reference: string) {
   await locks.deleteOne({ _id: date, reference, kind: "hold" });
 }
 
+// A deleted booking gives its date back, whether it was paid (booked) or still
+// at checkout (hold). Another booking's or a block on the same day is untouched.
+export async function releaseBookingDate(date: string, reference: string) {
+  const locks = await locksCollection();
+  await locks.deleteOne({ _id: date, reference, kind: { $in: ["hold", "booked"] } });
+}
+
 export async function blockDate(date: string) {
   const locks = await locksCollection();
   try {

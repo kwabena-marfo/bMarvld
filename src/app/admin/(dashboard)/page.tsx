@@ -1,8 +1,23 @@
 "use client";
 
+import { Trash2Icon } from "lucide-react";
+import { useState } from "react";
+import { toast } from "sonner";
 import { EmptyList, ListPagination, ListSearch, useAdminList, useListParams } from "@/components/AdminList";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { sendJson } from "@/lib/forms";
 import { cn } from "@/lib/utils";
 import { formatCedis } from "@/data/packages";
 import type { BookingStatus } from "@/lib/bookings";
@@ -45,7 +60,18 @@ export default function BookingsPage() {
   const { q, page } = list;
   const showAll = list.get("all") === "1";
   const query = new URLSearchParams({ q, page: String(page), ...(showAll && { all: "1" }) }).toString();
-  const { data, error, loading } = useAdminList<BookingList>(`/bookings?${query}`);
+  const { data, error, loading, reload } = useAdminList<BookingList>(`/bookings?${query}`);
+  const [confirming, setConfirming] = useState<Booking | null>(null);
+
+  async function remove(b: Booking) {
+    try {
+      await sendJson(`/api/admin/bookings/${encodeURIComponent(b.reference)}`, undefined, "DELETE");
+      toast.success(`${b.name}'s booking deleted`);
+      reload();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not delete");
+    }
+  }
 
   const bookings = data?.bookings;
 
@@ -98,12 +124,34 @@ export default function BookingsPage() {
                 {formatCedis(b.price)} · {b.reference}
               </p>
             </div>
-            <div>
+            <div className="flex items-start justify-between gap-2 md:flex-col md:items-end">
               <Badge className={cn("tracking-wider uppercase", statusStyles[b.status])}>{statusLabels[b.status]}</Badge>
+              <Button variant="ghost" size="icon-sm" aria-label={`Delete ${b.name}'s booking`} onClick={() => setConfirming(b)}>
+                <Trash2Icon className="text-destructive" />
+              </Button>
             </div>
           </div>
         ))}
       </div>
+
+      <AlertDialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {confirming?.name}&apos;s booking?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirming?.status === "deposit_paid" || confirming?.status === "needs_refund"
+                ? `${confirming.date} opens up for booking again. Their ${formatCedis(confirming.deposit)} deposit isn't refunded automatically; refund it from your Paystack dashboard if you need to. This can't be undone.`
+                : "It's removed from your bookings, and its date is freed if it was still being held. This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" onClick={() => confirming && remove(confirming)}>
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {data && (
         <ListPagination
