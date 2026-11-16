@@ -168,7 +168,7 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
   const { isSubmitting } = form.formState;
 
   return (
-    <form ref={formRef} onSubmit={form.handleSubmit(onSubmit)} className="grid gap-10 lg:grid-cols-[1fr_340px]" noValidate>
+    <form ref={formRef} onSubmit={form.handleSubmit(onSubmit)} className="grid gap-10" noValidate>
       <FieldGroup className="gap-6">
         <Controller
           name="packageId"
@@ -329,46 +329,54 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
         </div>
       </FieldGroup>
 
-      <aside className="viewfinder h-fit p-8 text-cream/40">
+      {/* Sits under the form, full width. From md up the package is on the left
+          and the price and pay button on the right, so it stays short. */}
+      <aside className="viewfinder p-8 text-cream/40">
         {pkg && (
-          <div className="text-cream">
-            <p className="mb-2 text-xs font-medium tracking-[0.2em] text-cream-dim uppercase">Summary</p>
-            <p className="font-display text-2xl">{pkg.name}</p>
-            <ul className="mt-4 space-y-1 text-sm text-cream-dim">
-              {pkg.features.map((f) => (
-                <li key={f} className="flex gap-2">
-                  <span aria-hidden className="text-gold">•</span>
-                  {f}
-                </li>
-              ))}
-            </ul>
-            <dl className="mt-6 space-y-2 border-t border-cream/10 pt-6 text-sm">
-              <div className="flex justify-between">
-                <dt className="text-cream-dim">Session total</dt>
-                <dd>{formatCedis(pkg.price)}</dd>
-              </div>
-              <div className="flex justify-between text-base font-semibold">
-                <dt>Deposit due now ({pkg.depositPercent}%)</dt>
-                <dd className="text-gold">{formatCedis(depositFor(pkg))}</dd>
-              </div>
-              {pkg.depositPercent < 100 && (
+          <div className="grid gap-6 text-cream md:grid-cols-2 md:gap-12">
+            <div>
+              <p className="mb-2 text-xs font-medium tracking-[0.2em] text-cream-dim uppercase">Summary</p>
+              <p className="font-display text-2xl">{pkg.name}</p>
+              <ul className="mt-4 grid gap-x-6 gap-y-1 text-sm text-cream-dim sm:grid-cols-2 md:grid-cols-1 lg:grid-cols-2">
+                {pkg.features.map((f) => (
+                  <li key={f} className="flex gap-2">
+                    <span aria-hidden className="text-gold">•</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="border-t border-cream/10 pt-6 md:border-t-0 md:border-l md:pt-0 md:pl-12">
+              <dl className="space-y-2 text-sm">
                 <div className="flex justify-between">
-                  <dt className="text-cream-dim">Balance on the day</dt>
-                  <dd>{formatCedis(pkg.price - depositFor(pkg))}</dd>
+                  <dt className="text-cream-dim">Session total</dt>
+                  <dd>{formatCedis(pkg.price)}</dd>
                 </div>
-              )}
-            </dl>
+                <div className="flex justify-between text-base font-semibold">
+                  <dt>Deposit due now ({pkg.depositPercent}%)</dt>
+                  <dd className="text-gold">{formatCedis(depositFor(pkg))}</dd>
+                </div>
+                {pkg.depositPercent < 100 && (
+                  <div className="flex justify-between">
+                    <dt className="text-cream-dim">Balance on the day</dt>
+                    <dd>{formatCedis(pkg.price - depositFor(pkg))}</dd>
+                  </div>
+                )}
+              </dl>
 
-            {error && <p className="mt-6 border border-destructive/50 p-3 text-sm text-destructive">{error}</p>}
+              {error && <p className="mt-6 border border-destructive/50 p-3 text-sm text-destructive">{error}</p>}
 
-            <Button type="submit" size="lg" disabled={isSubmitting || confirming} className="mt-6 w-full">
-              {confirming
-                ? "Confirming your booking…"
-                : isSubmitting
-                  ? "Opening secure checkout…"
-                  : `Pay ${formatCedis(depositFor(pkg))} deposit`}
-            </Button>
-            <p className="mt-3 text-center text-xs text-cream-dim">Secure payment by Paystack · Card or Mobile Money</p>
+              <Button type="submit" size="lg" disabled={isSubmitting || confirming} className="mt-6 w-full">
+                {confirming
+                  ? "Confirming your booking…"
+                  : isSubmitting
+                    ? "Opening secure checkout…"
+                    : `Pay ${formatCedis(depositFor(pkg))} deposit`}
+              </Button>
+              <p className="mt-3 text-center text-xs text-cream-dim">
+                Secure payment by Paystack · Card or Mobile Money
+              </p>
+            </div>
           </div>
         )}
       </aside>
