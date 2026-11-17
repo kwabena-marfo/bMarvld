@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { DriveButton, fromComputer, type UploadSource } from "@/components/DriveButton";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -303,15 +304,15 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
   const [state, setState] = useState<UploadState | null>(null);
   const busy = !!state && state.done + state.failed.length < state.total;
 
-  async function upload(files: File[]) {
-    setState({ total: files.length, done: 0, failed: [] });
+  async function upload(sources: UploadSource[]) {
+    setState({ total: sources.length, done: 0, failed: [] });
     // A few at a time: fast, without saturating a phone connection.
-    const queue = [...files];
+    const queue = [...sources];
     const worker = async () => {
-      for (let file = queue.shift(); file; file = queue.shift()) {
-        const name = file.name;
+      for (let source = queue.shift(); source; source = queue.shift()) {
+        const { name } = source;
         try {
-          await uploadClientPhoto(galleryId, kind, file);
+          await uploadClientPhoto(galleryId, kind, await source.file());
           setState((s) => s && { ...s, done: s.done + 1 });
         } catch (e) {
           const message = e instanceof Error ? e.message : "Upload failed";
@@ -325,9 +326,12 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
 
   return (
     <div>
-      <Button type="button" disabled={busy} onClick={() => input.current?.click()}>
-        <UploadIcon /> {busy ? `Uploading ${state.done + state.failed.length + 1} of ${state.total}…` : label}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" disabled={busy} onClick={() => input.current?.click()}>
+          <UploadIcon /> {busy ? `Uploading ${state.done + state.failed.length + 1} of ${state.total}…` : label}
+        </Button>
+        <DriveButton disabled={busy} onPicked={upload} />
+      </div>
       <input
         ref={input}
         type="file"
@@ -337,7 +341,7 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          if (files.length) upload(files);
+          if (files.length) upload(fromComputer(files));
         }}
       />
       {state && !busy && (
@@ -347,8 +351,8 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
       )}
       {state && state.failed.length > 0 && (
         <ul className="mt-2 space-y-1 text-sm text-destructive">
-          {state.failed.map((f) => (
-            <li key={f.name}>
+          {state.failed.map((f, i) => (
+            <li key={i}>
               {f.name}: {f.message}
             </li>
           ))}

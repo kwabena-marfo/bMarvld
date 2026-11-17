@@ -19,6 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
+import { DriveButton, fromComputer, type UploadSource } from "@/components/DriveButton";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -78,16 +79,16 @@ export default function GalleryAdmin() {
     load();
   }, [load]);
 
-  async function upload(files: File[], details: Details) {
-    setUploads(files.map((f) => ({ name: f.name, state: "uploading" })));
+  async function upload(sources: UploadSource[], details: Details) {
+    setUploads(sources.map((s) => ({ name: s.name, state: "uploading" })));
 
     // A few at a time: fast, without saturating a phone connection.
-    const queue = files.map((file, i) => ({ file, i }));
+    const queue = sources.map((source, i) => ({ source, i }));
     const worker = async () => {
       for (let job = queue.shift(); job; job = queue.shift()) {
-        const { file, i } = job;
+        const { source, i } = job;
         try {
-          await uploadOne(file, details);
+          await uploadOne(await source.file(), details);
           setUploads((u) => u.map((x, j) => (j === i ? { ...x, state: "done" } : x)));
         } catch (e) {
           const message = e instanceof Error ? e.message : "Upload failed";
@@ -163,10 +164,16 @@ export default function GalleryAdmin() {
               </Field>
             )}
           />
-          <div className="md:pt-6">
+          <div className="flex flex-col gap-2 md:pt-6">
             <Button type="button" size="lg" disabled={busy} onClick={() => fileInput.current?.click()} className="w-full">
               <UploadIcon /> {busy ? "Uploading…" : "Choose photos"}
             </Button>
+            <DriveButton
+              size="lg"
+              className="w-full"
+              disabled={busy}
+              onPicked={(sources) => form.handleSubmit((details) => upload(sources, details))()}
+            />
             <input
               ref={fileInput}
               type="file"
@@ -176,7 +183,7 @@ export default function GalleryAdmin() {
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (files.length) form.handleSubmit((details) => upload(files, details))();
+                if (files.length) form.handleSubmit((details) => upload(fromComputer(files), details))();
               }}
             />
           </div>
