@@ -39,6 +39,17 @@ export async function getUploadedImage(publicId: string) {
   }
 }
 
+// Has Cloudinary download a photo from another address (a shared Google Drive
+// file) straight into a folder: the public site gallery, or a client's private one.
+export async function uploadFromUrl(url: string, { folder, authenticated = false }: { folder: string; authenticated?: boolean }) {
+  const res = await cloudinary.uploader.upload(url, {
+    folder,
+    resource_type: "image",
+    ...(authenticated ? { type: "authenticated" } : {}),
+  });
+  return { publicId: res.public_id as string, url: res.secure_url as string, width: res.width as number, height: res.height as number };
+}
+
 export async function deleteImage(publicId: string) {
   await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
 }

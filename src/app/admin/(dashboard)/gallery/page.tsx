@@ -19,7 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
-import { DriveButton, fromComputer, type UploadSource } from "@/components/DriveButton";
+import { DriveImport, type UploadJob } from "@/components/DriveImport";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -79,16 +79,16 @@ export default function GalleryAdmin() {
     load();
   }, [load]);
 
-  async function upload(sources: UploadSource[], details: Details) {
-    setUploads(sources.map((s) => ({ name: s.name, state: "uploading" })));
+  async function upload(jobs: UploadJob[]) {
+    setUploads(jobs.map((j) => ({ name: j.name, state: "uploading" })));
 
     // A few at a time: fast, without saturating a phone connection.
-    const queue = sources.map((source, i) => ({ source, i }));
+    const queue = jobs.map((job, i) => ({ job, i }));
     const worker = async () => {
-      for (let job = queue.shift(); job; job = queue.shift()) {
-        const { source, i } = job;
+      for (let next = queue.shift(); next; next = queue.shift()) {
+        const { job, i } = next;
         try {
-          await uploadOne(await source.file(), details);
+          await job.run();
           setUploads((u) => u.map((x, j) => (j === i ? { ...x, state: "done" } : x)));
         } catch (e) {
           const message = e instanceof Error ? e.message : "Upload failed";
@@ -164,16 +164,10 @@ export default function GalleryAdmin() {
               </Field>
             )}
           />
-          <div className="flex flex-col gap-2 md:pt-6">
+          <div className="md:pt-6">
             <Button type="button" size="lg" disabled={busy} onClick={() => fileInput.current?.click()} className="w-full">
               <UploadIcon /> {busy ? "Uploading…" : "Choose photos"}
             </Button>
-            <DriveButton
-              size="lg"
-              className="w-full"
-              disabled={busy}
-              onPicked={(sources) => form.handleSubmit((details) => upload(sources, details))()}
-            />
             <input
               ref={fileInput}
               type="file"
@@ -183,10 +177,31 @@ export default function GalleryAdmin() {
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (files.length) form.handleSubmit((details) => upload(fromComputer(files), details))();
+                if (files.length) {
+                  form.handleSubmit((details) =>
+                    upload(files.map((f) => ({ name: f.name, run: () => uploadOne(f, details) })))
+                  )();
+                }
               }}
             />
           </div>
+        </div>
+
+        <div className="mt-6 text-cream">
+          <p className="mb-2 text-sm text-cream-dim">Or import a folder from Google Drive</p>
+          <DriveImport
+            disabled={busy}
+            onFound={(drivePhotos) =>
+              form.handleSubmit((details) =>
+                upload(
+                  drivePhotos.map((p) => ({
+                    name: p.name,
+                    run: () => sendJson("/api/admin/photos/drive", { fileId: p.id, ...details }).then(() => {}),
+                  }))
+                )
+              )()
+            }
+          />
         </div>
 
         {uploads.length > 0 && (

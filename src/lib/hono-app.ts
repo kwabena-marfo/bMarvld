@@ -39,7 +39,16 @@ import { abandonBooking, cancelPendingBooking, confirmBooking, createBooking, de
 import { blockDate, unavailableDates, unblockDate, upcomingLocks } from "./dateLocks";
 import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } from "./paystack";
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
-import { deleteImage, getUploadedImage, privateZipUrl, signPrivateUpload, signUpload } from "./cloudinary";
+import {
+  deleteImage,
+  getUploadedImage,
+  privateZipUrl,
+  signPrivateUpload,
+  signUpload,
+  uploadFolder,
+  uploadFromUrl,
+} from "./cloudinary";
+import { checkSize, driveDownloadUrl, DriveError, getDriveFile, listDriveLink } from "./googleDrive";
 import { addPhoto, listPhotos, removePhoto } from "./photos";
 import { SITE_URL } from "./siteUrl";
 import { pageParams } from "./listQuery";
@@ -72,6 +81,17 @@ async function readJson(c: { req: { json: () => Promise<unknown> } }) {
 // sent to a preview copy of the site.
 const appUrl = (c: { req: { url: string } }) =>
   process.env.VERCEL_ENV === "production" ? SITE_URL : process.env.APP_URL || new URL(c.req.url).origin;
+
+// A Drive or Cloudinary failure during an import, as a message for the admin.
+function importError(err: unknown) {
+  if (err instanceof DriveError) return err.message;
+  const message = (err as { message?: unknown })?.message;
+  console.error(err);
+  // Cloudinary's message can quote the Drive download address, key included.
+  return typeof message === "string" && message
+    ? `Cloudinary: ${message.replace(/([?&]key=)[^&\s]+/g, "$1…")}`
+    : "Import failed";
+}
 
 // First message per field, in the shape the forms map onto react-hook-form's setError.
 function fieldErrors(error: z.ZodError) {
@@ -297,6 +317,40 @@ admin.post("/photos", async (c) => {
   return c.json({ ok: true, id });
 });
 
+// ---------------------------------------------------- Google Drive import ----
+// The browser lists a pasted link, then imports its photos a few at a time;
+// each import is Cloudinary fetching one photo from Drive.
+
+admin.post("/drive/list", async (c) => {
+  const body = z.object({ link: z.string().min(1).max(2000) }).safeParse(await readJson(c));
+  if (!body.success) return c.json({ error: "Paste a Google Drive folder or photo link" }, 400);
+  try {
+    return c.json(await listDriveLink(body.data.link));
+  } catch (err) {
+    return c.json({ error: importError(err) }, 400);
+  }
+});
+
+const driveFileId = z.object({ fileId: z.string().min(1).max(200) });
+
+admin.post("/photos/drive", async (c) => {
+  const parsed = photoDetailsSchema.extend(driveFileId.shape).safeParse(await readJson(c));
+  if (!parsed.success) return c.json({ error: "Invalid photo details" }, 400);
+  try {
+    const file = await getDriveFile(parsed.data.fileId);
+    checkSize(file);
+    const image = await uploadFromUrl(driveDownloadUrl(file.id), { folder: uploadFolder });
+    const id = await addPhoto({
+      ...image,
+      alt: parsed.data.alt || `${parsed.data.category} by B.Marvld`,
+      category: parsed.data.category,
+    });
+    return c.json({ ok: true, id });
+  } catch (err) {
+    return c.json({ error: importError(err) }, 400);
+  }
+});
+
 admin.delete("/photos/:id", async (c) => {
   const publicId = await removePhoto(c.req.param("id"));
   if (!publicId) return c.json({ error: "Photo not found" }, 404);
@@ -355,6 +409,24 @@ admin.post("/clients/:id/:kind{proofs|finals}", async (c) => {
   const photo = await addClientPhoto(c.req.param("id"), kind.data, body.data.publicId, body.data.name);
   if (!photo) return c.json({ error: "Upload not found on Cloudinary" }, 400);
   return c.json({ ok: true });
+});
+
+admin.post("/clients/:id/:kind{proofs|finals}/drive", async (c) => {
+  const kind = photoKind.safeParse(c.req.param("kind"));
+  const body = driveFileId.safeParse(await readJson(c));
+  if (!kind.success || !body.success) return c.json({ error: "Invalid photo" }, 400);
+  const folder = uploadFolderFor(c.req.param("id"), kind.data);
+  if (!folder) return c.json({ error: "Gallery not found" }, 404);
+  try {
+    const file = await getDriveFile(body.data.fileId);
+    checkSize(file, { proof: kind.data === "proofs" });
+    const image = await uploadFromUrl(driveDownloadUrl(file.id), { folder, authenticated: true });
+    const photo = await addClientPhoto(c.req.param("id"), kind.data, image.publicId, file.name);
+    if (!photo) return c.json({ error: "Gallery not found" }, 404);
+    return c.json({ ok: true });
+  } catch (err) {
+    return c.json({ error: importError(err) }, 400);
+  }
 });
 
 admin.delete("/clients/:id/:kind{proofs|finals}/:photoId", async (c) => {

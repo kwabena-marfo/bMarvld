@@ -17,7 +17,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DriveButton, fromComputer, type UploadSource } from "@/components/DriveButton";
+import { DriveImport, type UploadJob } from "@/components/DriveImport";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -304,15 +304,15 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
   const [state, setState] = useState<UploadState | null>(null);
   const busy = !!state && state.done + state.failed.length < state.total;
 
-  async function upload(sources: UploadSource[]) {
-    setState({ total: sources.length, done: 0, failed: [] });
+  async function upload(jobs: UploadJob[]) {
+    setState({ total: jobs.length, done: 0, failed: [] });
     // A few at a time: fast, without saturating a phone connection.
-    const queue = [...sources];
+    const queue = [...jobs];
     const worker = async () => {
-      for (let source = queue.shift(); source; source = queue.shift()) {
-        const { name } = source;
+      for (let job = queue.shift(); job; job = queue.shift()) {
+        const { name } = job;
         try {
-          await uploadClientPhoto(galleryId, kind, await source.file());
+          await job.run();
           setState((s) => s && { ...s, done: s.done + 1 });
         } catch (e) {
           const message = e instanceof Error ? e.message : "Upload failed";
@@ -326,11 +326,22 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
 
   return (
     <div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-start gap-2">
         <Button type="button" disabled={busy} onClick={() => input.current?.click()}>
           <UploadIcon /> {busy ? `Uploading ${state.done + state.failed.length + 1} of ${state.total}…` : label}
         </Button>
-        <DriveButton disabled={busy} onPicked={upload} />
+        <DriveImport
+          disabled={busy}
+          className="w-full max-w-xl sm:w-auto sm:flex-1"
+          onFound={(photos) =>
+            upload(
+              photos.map((p) => ({
+                name: p.name,
+                run: () => sendJson(`/api/admin/clients/${galleryId}/${kind}/drive`, { fileId: p.id }).then(() => {}),
+              }))
+            )
+          }
+        />
       </div>
       <input
         ref={input}
@@ -341,7 +352,7 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          if (files.length) upload(fromComputer(files));
+          if (files.length) upload(files.map((f) => ({ name: f.name, run: () => uploadClientPhoto(galleryId, kind, f) })));
         }}
       />
       {state && !busy && (
