@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyList, ListPagination, ListSearch, useAdminList, useListParams } from "@/components/AdminList";
+import { BulkBar, SelectOverlay, useBulkSelect } from "@/components/BulkSelect";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -54,6 +55,7 @@ export default function FavouritesAdmin() {
   }
 
   const photos = data?.photos;
+  const bulk = useBulkSelect(photos?.map((p) => p.id) ?? []);
 
   return (
     <>
@@ -71,6 +73,19 @@ export default function FavouritesAdmin() {
         <EmptyList q={q} empty="No client has featured a photo yet." noun="favourites" />
       )}
 
+      <BulkBar
+        selection={bulk}
+        total={photos?.length ?? 0}
+        deleteUrl="/api/admin/featured/delete"
+        noun={["photo", "photos"]}
+        verb="Remove"
+        describe={() =>
+          "They're taken off Client favourites and their copies are deleted from Cloudinary. Clients whose delivery link is still open will see them un-starred. This can't be undone."
+        }
+        onDeleted={reload}
+        className="mb-4"
+      />
+
       <div
         className={cn(
           "grid grid-cols-2 gap-3 transition-opacity sm:grid-cols-3 lg:grid-cols-4",
@@ -81,6 +96,7 @@ export default function FavouritesAdmin() {
           <figure key={p.id} className="bg-ink-soft">
             <div className="relative aspect-square">
               <Image src={p.src} alt={`Featured by ${p.clientName}`} fill unoptimized className="object-cover" />
+              <SelectOverlay selection={bulk} id={p.id} label={`${p.clientName}'s photo`} />
             </div>
             <figcaption className="flex items-start justify-between gap-2 p-3 text-xs">
               <div className="min-w-0">

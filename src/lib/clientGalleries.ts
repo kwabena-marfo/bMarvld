@@ -4,6 +4,7 @@ import { getDb } from "./mongodb";
 import { searchFilter, type PageParams } from "./listQuery";
 import {
   clientsFolder,
+  deleteImages,
   deletePrivateFolder,
   deletePrivateImage,
   getPrivateImage,
@@ -203,6 +204,27 @@ export async function removePhoto(id: string, kind: PhotoKind, photoId: string) 
   if (!photo) return false;
   await deletePrivateImage(photo.publicId);
   return true;
+}
+
+// Several photos at once; returns how many were removed, or null if there's no such gallery.
+export async function removePhotos(id: string, kind: PhotoKind, photoIds: string[]) {
+  const _id = oid(id);
+  if (!_id) return null;
+  const g = await (await galleries()).findOneAndUpdate(
+    { _id },
+    {
+      $pull: {
+        [kind]: { id: { $in: photoIds } },
+        ...(kind === "proofs" ? { selected: { $in: photoIds } } : { featured: { $in: photoIds } }),
+      },
+      $set: { updatedAt: new Date() },
+    }
+  );
+  if (!g) return null;
+  const wanted = new Set(photoIds);
+  const removed = g[kind].filter((p) => wanted.has(p.id)).map((p) => p.publicId);
+  await deleteImages(removed, { authenticated: true });
+  return removed.length;
 }
 
 // Creates the link (or keeps the existing one) and sets how long it stays open.

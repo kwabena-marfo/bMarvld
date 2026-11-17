@@ -43,3 +43,13 @@ export async function removePhoto(id: string) {
   const doc = await photos.findOneAndDelete({ _id: new ObjectId(id) });
   return doc?.publicId ?? null;
 }
+
+// Several at once; returns the Cloudinary ids of the ones that existed.
+export async function removePhotos(ids: string[]) {
+  const _ids = ids.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+  if (!_ids.length) return [];
+  const photos = await photosCollection();
+  const docs = await photos.find({ _id: { $in: _ids } }, { projection: { publicId: 1 } }).toArray();
+  await photos.deleteMany({ _id: { $in: docs.map((d) => d._id) } });
+  return docs.map((d) => d.publicId);
+}

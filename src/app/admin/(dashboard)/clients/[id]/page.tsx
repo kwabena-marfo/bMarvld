@@ -17,7 +17,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { DriveImport, type UploadJob } from "@/components/DriveImport";
+import { BulkBar, SelectOverlay, useBulkSelect } from "@/components/BulkSelect";
+import { DriveImport } from "@/components/DriveImport";
+import { fromDrive, fromFiles, MAX_UPLOAD_BYTES, UploadReview, type PendingPhoto } from "@/components/UploadReview";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -302,17 +304,33 @@ type UploadState = { total: number; done: number; failed: { name: string; messag
 function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind: PhotoKind; label: string; onDone: () => void }) {
   const input = useRef<HTMLInputElement>(null);
   const [state, setState] = useState<UploadState | null>(null);
+  const [review, setReview] = useState<PendingPhoto[] | null>(null);
   const busy = !!state && state.done + state.failed.length < state.total;
 
-  async function upload(jobs: UploadJob[]) {
-    setState({ total: jobs.length, done: 0, failed: [] });
+  // Computer files go up from the browser; Drive photos are fetched by Cloudinary.
+  const send = ({ source }: PendingPhoto) =>
+    source.kind === "file"
+      ? uploadClientPhoto(galleryId, kind, source.file)
+      : sendJson(`/api/admin/clients/${galleryId}/${kind}/drive`, { fileId: source.id });
+
+  // Over 10 MB, a computer proof is scaled down; anything else is refused.
+  const warning = (p: PendingPhoto) =>
+    p.size <= MAX_UPLOAD_BYTES
+      ? undefined
+      : kind === "proofs" && p.source.kind === "file"
+        ? "Over 10 MB: will be scaled down"
+        : "Over 10 MB: won't upload";
+
+  async function upload(photos: PendingPhoto[]) {
+    setReview(null);
+    setState({ total: photos.length, done: 0, failed: [] });
     // A few at a time: fast, without saturating a phone connection.
-    const queue = [...jobs];
+    const queue = [...photos];
     const worker = async () => {
-      for (let job = queue.shift(); job; job = queue.shift()) {
-        const { name } = job;
+      for (let photo = queue.shift(); photo; photo = queue.shift()) {
+        const { name } = photo;
         try {
-          await job.run();
+          await send(photo);
           setState((s) => s && { ...s, done: s.done + 1 });
         } catch (e) {
           const message = e instanceof Error ? e.message : "Upload failed";
@@ -333,14 +351,7 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
         <DriveImport
           disabled={busy}
           className="w-full max-w-xl sm:w-auto sm:flex-1"
-          onFound={(photos) =>
-            upload(
-              photos.map((p) => ({
-                name: p.name,
-                run: () => sendJson(`/api/admin/clients/${galleryId}/${kind}/drive`, { fileId: p.id }).then(() => {}),
-              }))
-            )
-          }
+          onFound={(photos) => setReview(fromDrive(photos))}
         />
       </div>
       <input
@@ -352,9 +363,10 @@ function Uploader({ galleryId, kind, label, onDone }: { galleryId: string; kind:
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
           e.target.value = "";
-          if (files.length) upload(files.map((f) => ({ name: f.name, run: () => uploadClientPhoto(galleryId, kind, f) })));
+          if (files.length) setReview(fromFiles(files));
         }}
       />
+      <UploadReview photos={review} warning={warning} onCancel={() => setReview(null)} onConfirm={upload} />
       {state && !busy && (
         <p className="mt-3 text-sm text-cream-dim">
           {state.done} uploaded{state.failed.length > 0 && `, ${state.failed.length} failed`}.
@@ -390,6 +402,17 @@ function PhotoGrid({
 }) {
   // One confirm dialog for the whole grid, opened for the photo being deleted.
   const [confirming, setConfirming] = useState<Photo | null>(null);
+  const bulk = useBulkSelect(photos.map((p) => p.id));
+
+  function describeBulk(ids: string[]) {
+    const marked = ids.filter((id) => selected?.has(id)).length;
+    if (kind === "finals") {
+      return "The client won't see or be able to download these edits any more. They're removed from Cloudinary. This can't be undone.";
+    }
+    return `${
+      marked ? `The client picked ${marked} of them; ${marked === 1 ? "it's" : "they're"} taken out of their selection. ` : ""
+    }They're removed from the client's gallery and from Cloudinary. This can't be undone.`;
+  }
 
   async function remove(photo: Photo) {
     try {
@@ -425,11 +448,21 @@ function PhotoGrid({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <BulkBar
+        selection={bulk}
+        total={photos.length}
+        deleteUrl={`/api/admin/clients/${galleryId}/${kind}/delete`}
+        noun={kind === "proofs" ? ["proof", "proofs"] : ["edit", "edits"]}
+        describe={describeBulk}
+        onDeleted={onRemoved}
+        className="mb-3"
+      />
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
         {photos.map((p) => {
           const isPicked = selected?.has(p.id);
           return (
             <figure key={p.id} className={cn("group relative bg-ink-soft", isPicked && "ring-2 ring-gold")}>
+              <SelectOverlay selection={bulk} id={p.id} label={p.name} />
               <Image
                 src={p.src}
                 alt={p.name}

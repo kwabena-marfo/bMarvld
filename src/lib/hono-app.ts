@@ -23,6 +23,7 @@ import {
   markReminded,
   pickedPublicIds,
   removePhoto as removeClientPhoto,
+  removePhotos as removeClientPhotos,
   reopenSelection,
   setFinalFeatured,
   setProofSelected,
@@ -41,6 +42,7 @@ import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } 
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
 import {
   deleteImage,
+  deleteImages,
   getUploadedImage,
   privateZipUrl,
   signPrivateUpload,
@@ -49,7 +51,7 @@ import {
   uploadFromUrl,
 } from "./cloudinary";
 import { checkSize, driveDownloadUrl, DriveError, getDriveFile, listDriveLink } from "./googleDrive";
-import { addPhoto, listPhotos, removePhoto } from "./photos";
+import { addPhoto, listPhotos, removePhoto, removePhotos } from "./photos";
 import { SITE_URL } from "./siteUrl";
 import { pageParams } from "./listQuery";
 import { listFeaturedForAdmin, removeFeatured } from "./featured";
@@ -351,6 +353,16 @@ admin.post("/photos/drive", async (c) => {
   }
 });
 
+const bulkIds = z.object({ ids: z.array(z.string().min(1).max(100)).min(1).max(1000) });
+
+admin.post("/photos/delete", async (c) => {
+  const body = bulkIds.safeParse(await readJson(c));
+  if (!body.success) return c.json({ error: "Choose photos to delete" }, 400);
+  const publicIds = await removePhotos(body.data.ids);
+  await deleteImages(publicIds);
+  return c.json({ deleted: publicIds.length });
+});
+
 admin.delete("/photos/:id", async (c) => {
   const publicId = await removePhoto(c.req.param("id"));
   if (!publicId) return c.json({ error: "Photo not found" }, 404);
@@ -429,6 +441,15 @@ admin.post("/clients/:id/:kind{proofs|finals}/drive", async (c) => {
   }
 });
 
+admin.post("/clients/:id/:kind{proofs|finals}/delete", async (c) => {
+  const kind = photoKind.safeParse(c.req.param("kind"));
+  const body = bulkIds.safeParse(await readJson(c));
+  if (!kind.success || !body.success) return c.json({ error: "Choose photos to delete" }, 400);
+  const deleted = await removeClientPhotos(c.req.param("id"), kind.data, body.data.ids);
+  if (deleted === null) return c.json({ error: "Gallery not found" }, 404);
+  return c.json({ deleted });
+});
+
 admin.delete("/clients/:id/:kind{proofs|finals}/:photoId", async (c) => {
   const kind = photoKind.safeParse(c.req.param("kind"));
   if (!kind.success || !(await removeClientPhoto(c.req.param("id"), kind.data, c.req.param("photoId")))) {
@@ -472,6 +493,19 @@ admin.post("/clients/:id/reopen", async (c) => {
 admin.get("/featured", async (c) => {
   const { q, page, pageSize } = c.req.query();
   return c.json(await listFeaturedForAdmin({ q, page: pageParams(page, pageSize, 24) }));
+});
+
+admin.post("/featured/delete", async (c) => {
+  const body = bulkIds.safeParse(await readJson(c));
+  if (!body.success) return c.json({ error: "Choose photos to remove" }, 400);
+  let deleted = 0;
+  for (const id of body.data.ids) {
+    const removed = await removeFeatured(id);
+    if (!removed) continue;
+    await unmarkFeatured(removed.galleryId, removed.finalId);
+    deleted++;
+  }
+  return c.json({ deleted });
 });
 
 admin.delete("/featured/:id", async (c) => {

@@ -7,14 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendJson } from "@/lib/forms";
 
-/** One photo to upload: from the computer, or imported from Google Drive. */
-export type UploadJob = { name: string; run: () => Promise<void> };
-
 export type DrivePhoto = { id: string; name: string; size: number };
 
 /**
  * A box to paste a Google Drive folder (or photo) link into. Finds the photos
- * and hands them back; the caller imports each one into Cloudinary.
+ * and hands them back for review; the caller then imports the chosen ones.
  */
 export function DriveImport({
   disabled,

@@ -54,6 +54,17 @@ export async function deleteImage(publicId: string) {
   await cloudinary.uploader.destroy(publicId, { resource_type: "image", invalidate: true });
 }
 
+// Bulk delete, 100 at a time (Cloudinary's limit per call).
+export async function deleteImages(publicIds: string[], { authenticated = false } = {}) {
+  for (let i = 0; i < publicIds.length; i += 100) {
+    await cloudinary.api.delete_resources(publicIds.slice(i, i + 100), {
+      resource_type: "image",
+      type: authenticated ? "authenticated" : "upload",
+      invalidate: true,
+    });
+  }
+}
+
 // ------------------------------------------------------- client galleries ----
 // Client proofs and finals are uploaded as "authenticated" assets: Cloudinary
 // only serves them through URLs signed here, and the signature covers the

@@ -19,7 +19,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
-import { DriveImport, type UploadJob } from "@/components/DriveImport";
+import { BulkBar, SelectOverlay, useBulkSelect } from "@/components/BulkSelect";
+import { DriveImport } from "@/components/DriveImport";
+import { fromDrive, fromFiles, MAX_UPLOAD_BYTES, UploadReview, type PendingPhoto } from "@/components/UploadReview";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -62,6 +64,7 @@ async function uploadOne(file: File, details: Details) {
 export default function GalleryAdmin() {
   const [photos, setPhotos] = useState<Shot[] | null>(null);
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const [review, setReview] = useState<PendingPhoto[] | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const form = useForm<z.input<typeof photoDetailsSchema>, unknown, Details>({
@@ -79,16 +82,28 @@ export default function GalleryAdmin() {
     load();
   }, [load]);
 
-  async function upload(jobs: UploadJob[]) {
-    setUploads(jobs.map((j) => ({ name: j.name, state: "uploading" })));
+  // Computer files go up from the browser; Drive photos are fetched by Cloudinary.
+  const send = ({ source }: PendingPhoto, details: Details) =>
+    source.kind === "file"
+      ? uploadOne(source.file, details)
+      : sendJson("/api/admin/photos/drive", { fileId: source.id, ...details });
+
+  // The category and description are read when the upload is confirmed.
+  function upload(chosen: PendingPhoto[]) {
+    form.handleSubmit((details) => uploadAll(chosen, details))();
+  }
+
+  async function uploadAll(chosen: PendingPhoto[], details: Details) {
+    setReview(null);
+    setUploads(chosen.map((p) => ({ name: p.name, state: "uploading" })));
 
     // A few at a time: fast, without saturating a phone connection.
-    const queue = jobs.map((job, i) => ({ job, i }));
+    const queue = chosen.map((photo, i) => ({ photo, i }));
     const worker = async () => {
       for (let next = queue.shift(); next; next = queue.shift()) {
-        const { job, i } = next;
+        const { photo, i } = next;
         try {
-          await job.run();
+          await send(photo, details);
           setUploads((u) => u.map((x, j) => (j === i ? { ...x, state: "done" } : x)));
         } catch (e) {
           const message = e instanceof Error ? e.message : "Upload failed";
@@ -115,6 +130,8 @@ export default function GalleryAdmin() {
   const list = useListParams();
   const found = photos?.filter((p) => matchesSearch(list.q, p.category, p.alt));
   const shown = found && paginate(found, list.page, pageSize);
+  // Select all takes every photo matching the search, on every page.
+  const bulk = useBulkSelect(found?.flatMap((p) => (p.id ? [p.id] : [])) ?? []);
 
   return (
     <>
@@ -177,11 +194,7 @@ export default function GalleryAdmin() {
               onChange={(e) => {
                 const files = Array.from(e.target.files ?? []);
                 e.target.value = "";
-                if (files.length) {
-                  form.handleSubmit((details) =>
-                    upload(files.map((f) => ({ name: f.name, run: () => uploadOne(f, details) })))
-                  )();
-                }
+                if (files.length) setReview(fromFiles(files));
               }}
             />
           </div>
@@ -189,19 +202,7 @@ export default function GalleryAdmin() {
 
         <div className="mt-6 text-cream">
           <p className="mb-2 text-sm text-cream-dim">Or import a folder from Google Drive</p>
-          <DriveImport
-            disabled={busy}
-            onFound={(drivePhotos) =>
-              form.handleSubmit((details) =>
-                upload(
-                  drivePhotos.map((p) => ({
-                    name: p.name,
-                    run: () => sendJson("/api/admin/photos/drive", { fileId: p.id, ...details }).then(() => {}),
-                  }))
-                )
-              )()
-            }
-          />
+          <DriveImport disabled={busy} onFound={(drivePhotos) => setReview(fromDrive(drivePhotos))} />
         </div>
 
         {uploads.length > 0 && (
@@ -218,6 +219,13 @@ export default function GalleryAdmin() {
         )}
       </form>
 
+      <UploadReview
+        photos={review}
+        warning={(p) => (p.size > MAX_UPLOAD_BYTES ? "Over 10 MB: won't upload" : undefined)}
+        onCancel={() => setReview(null)}
+        onConfirm={upload}
+      />
+
       <ListSearch value={list.q} onSearch={list.setQuery} placeholder="Search category or description…" className="mb-6" />
 
       {!photos && <p className="text-cream-dim">Loading…</p>}
@@ -229,10 +237,21 @@ export default function GalleryAdmin() {
         />
       )}
 
+      <BulkBar
+        selection={bulk}
+        total={found?.length ?? 0}
+        deleteUrl="/api/admin/photos/delete"
+        noun={["photo", "photos"]}
+        describe={() => "They're removed from the site and from Cloudinary. This can't be undone."}
+        onDeleted={load}
+        className="mb-4"
+      />
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
         {shown?.items.map((p) => (
           <div key={p.id} className="group relative aspect-square overflow-hidden bg-ink-soft">
             <Image src={p.src} alt={p.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
+            {p.id && <SelectOverlay selection={bulk} id={p.id} label={p.alt || p.category} />}
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-linear-to-t from-ink/90 p-2 pl-3 text-xs">
               <span className="tracking-wider uppercase">{p.category}</span>
               <AlertDialog>
