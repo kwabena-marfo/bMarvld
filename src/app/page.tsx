@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Suspense } from "react";
 import { Aperture, Bokeh, Camera, CameraTripod, Softbox } from "@/components/Backdrops";
+import BookingBackdrop, { StudioBackdrop } from "@/components/BookingBackdrop";
 import GallerySection, { GallerySkeleton } from "@/components/GallerySection";
 import ClientFavourites from "@/components/ClientFavourites";
 import Logo from "@/components/Logo";
@@ -9,7 +10,7 @@ import { BookingSection, PackagesGrid, SectionSkeleton } from "@/components/Pack
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import { buttonVariants } from "@/components/ui/button";
-import { heroLeft, heroRight, studioBackdrop } from "@/data/gallery";
+import { heroLeft, heroRight } from "@/data/gallery";
 import { SITE_URL } from "@/lib/siteUrl";
 import { cn } from "@/lib/utils";
 
@@ -177,15 +178,11 @@ export default function Home() {
           id="book"
           className="relative isolate scroll-mt-16 overflow-hidden border-t border-cream/10 bg-ink-soft/50 in-[.light]:bg-[#e6c99e]"
         >
-          {/* A studio set, softly out of focus. The form sits on its own solid panel,
-              so the photo only shows around and faintly through it. */}
-          <Image
-            src={studioBackdrop.src}
-            alt=""
-            fill
-            sizes="100vw"
-            className="-z-10 object-cover object-[center_30%] opacity-30 blur-[3px] in-[.light]:opacity-25"
-          />
+          {/* A wall of small gallery photos. The form sits on its own solid panel,
+              so they only show around and faintly through it. */}
+          <Suspense fallback={<StudioBackdrop />}>
+            <BookingBackdrop />
+          </Suspense>
           <div className="absolute inset-0 -z-10 bg-linear-to-b from-ink/60 via-transparent to-ink/70" />
           <div className="mx-auto max-w-6xl px-4 py-24 sm:px-6">
             <SectionHeading eyebrow="Reserve your date" title="Book a session" />
