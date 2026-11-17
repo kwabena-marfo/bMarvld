@@ -133,15 +133,21 @@ export default function Home() {
               <p className="text-xs tracking-[0.4em] uppercase">
                 <span className="text-gold">●</span> About
               </p>
-              <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">Hi, I&apos;m Bright Marvl</h2>
+              <h2 className="mt-3 font-display text-4xl font-semibold sm:text-5xl">
+                Some stories are told in words, others in light.
+              </h2>
               <p className="mt-6 leading-relaxed">
-                I&apos;m a photographer who believes every frame should make you stop and stare. From bold studio
-                portraits and tailored fashion looks to kids&apos; shoots and graduation days, I chase light, styling
-                and honest emotion: the details that turn a photo into an heirloom.
+                At B.MARVLD, we notice the quiet spaces, the soft glances, the tiny pauses, the moments too quick to
+                keep. Every pose is a statement waiting to be told, every frame a story waiting to unfold, and every
+                click of the shutter a moment made timeless.
               </p>
               <p className="mt-4 leading-relaxed">
-                Every session is relaxed, directed and tailored to you, so all you have to do is show up and be
-                yourself. I&apos;ll take care of the rest.
+                To us, photography is not merely about what the camera sees, but what the heart remembers. It&apos;s
+                about preserving the beauty of now, giving memories a place to live, and allowing moments to outlast
+                the time they happened.
+              </p>
+              <p className="mt-4 leading-relaxed">
+                Here at B.MARVLD, we make photos feel like stories you want to read again and again.
               </p>
               <a
                 href="#book"
