@@ -10,7 +10,7 @@ export type Shot = {
 };
 
 // The hero pairs two portraits either side of the logo.
-export const heroLeft = { src: "/gallery/bm-hero-man.jpg" }; // smiling man in a striped brown and gold smock, mid-twirl
+export const heroLeft = { src: "/gallery/bm-hero-man-3.jpg" }; // smiling man in a striped brown and gold smock, mid-twirl
 export const heroRight = { src: "/gallery/bm-13.jpg" }; // woman in olive dress, arms raised
 
 // Blurred behind the booking form: the studio set with white drapes and glowing cream arches.

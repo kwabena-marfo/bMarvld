@@ -53,19 +53,20 @@ export default function Home() {
               fill
               priority
               sizes="(min-width: 768px) 46vw, 50vw"
-              className="object-cover object-[60%_15%] md:object-[center_15%]"
+              className="object-cover object-[60%_25%] md:object-[center_0%]"
             />
           </div>
           {/* On phones her face would land in the fade, so the crop shifts her toward the
-              solid outer edge and the solid band is wider. */}
-          <div className="absolute inset-y-0 right-0 w-1/2 mask-[linear-gradient(to_left,black_50%,transparent)] md:w-[46%] md:mask-[linear-gradient(to_left,black_35%,transparent)]">
+              solid outer edge and the solid band is wider. She's zoomed in a little so her
+              head matches his in size and height. */}
+          <div className="absolute inset-y-0 right-0 w-1/2 overflow-hidden mask-[linear-gradient(to_left,black_50%,transparent)] md:w-[46%] md:mask-[linear-gradient(to_left,black_35%,transparent)]">
             <Image
               src={heroRight.src}
               alt=""
               fill
               priority
               sizes="(min-width: 768px) 46vw, 50vw"
-              className="object-cover object-[35%_25%] md:object-[center_25%]"
+              className="origin-[54%_100%] scale-115 object-cover object-[35%_25%] md:origin-[40%_29%] md:object-[center_85%]"
             />
           </div>
           {/* Brand-coloured tint: warm gold at the outer edges deepening to black in the
