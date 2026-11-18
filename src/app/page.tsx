@@ -53,7 +53,7 @@ export default function Home() {
               fill
               priority
               sizes="(min-width: 768px) 46vw, 50vw"
-              className="object-cover object-[center_15%]"
+              className="object-cover object-[60%_15%] md:object-[center_15%]"
             />
           </div>
           {/* On phones her face would land in the fade, so the crop shifts her toward the
