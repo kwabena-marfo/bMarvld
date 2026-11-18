@@ -97,9 +97,12 @@ export default function ClientGalleryAdmin() {
     }
   }
 
+  // Numbered for the editor: "1.IMG_3500.JPG.jpeg", "2.IMG_3501.JPG.jpeg", …
+  const pickedNames = picked.map((p, i) => `${i + 1}.${p.name}.jpeg`).join("\n");
+
   function copyNames() {
     navigator.clipboard
-      .writeText(picked.map((p) => p.name).join("\n"))
+      .writeText(pickedNames)
       .then(() => toast.success(`${picked.length} file names copied`))
       .catch(() => toast.error("Couldn't copy. Select the list below instead"));
   }
@@ -240,7 +243,7 @@ export default function ClientGalleryAdmin() {
               The download is full size, with no watermark, and keeps your file names.
             </p>
             <pre className="max-h-48 overflow-auto border border-cream/10 bg-ink-soft p-4 text-xs leading-relaxed text-cream-dim select-all">
-              {picked.map((p) => p.name).join("\n")}
+              {pickedNames}
             </pre>
           </div>
         )}

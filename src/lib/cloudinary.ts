@@ -105,7 +105,7 @@ export function privateImageUrl(publicId: string, { width, watermark = false }: 
       ...(watermark
         ? [
             // A small logo repeated over the whole photo, so cropping can't remove it.
-            { overlay: watermarkId.replaceAll("/", ":"), width: 0.3, flags: ["relative", "tiled"], opacity: 22 },
+            { overlay: watermarkId.replaceAll("/", ":"), width: 0.3, flags: ["relative", "tiled"], opacity: 12 },
           ]
         : []),
     ],
