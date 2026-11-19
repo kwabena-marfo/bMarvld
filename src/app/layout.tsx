@@ -1,20 +1,23 @@
 import type { Metadata, Viewport } from "next";
-import { Josefin_Sans, Montserrat } from "next/font/google";
+import localFont from "next/font/local";
 import ThemeToggle, { ThemeProvider } from "@/components/ThemeToggle";
 import { SITE_URL } from "@/lib/siteUrl";
 import "./globals.css";
 
 // Josefin Sans echoes the geometric, high-waisted letterforms of the logo;
 // Montserrat matches its widely tracked "...be marveled" tagline.
-const josefin = Josefin_Sans({
+// Both are kept in ./fonts (latin, variable weight; from Google Fonts, Open
+// Font License) so builds never depend on downloading them.
+const josefin = localFont({
+  src: "./fonts/JosefinSans-latin.woff2",
   variable: "--font-josefin",
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
+  weight: "400 700",
 });
 
-const montserrat = Montserrat({
+const montserrat = localFont({
+  src: "./fonts/Montserrat-latin.woff2",
   variable: "--font-montserrat",
-  subsets: ["latin"],
+  weight: "100 900",
 });
 
 const title = "B.Marvld Photography | Photographer in Accra, Ghana";
