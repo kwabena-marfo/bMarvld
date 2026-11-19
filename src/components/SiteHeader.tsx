@@ -38,7 +38,7 @@ export default function SiteHeader() {
               {l.label}
             </Link>
           ))}
-          <Link href="/#book" className={buttonVariants({ size: "sm" })}>
+          <Link href="/#book" className={cn(buttonVariants(), "px-6 text-sm")}>
             Book
           </Link>
         </nav>

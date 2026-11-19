@@ -43,9 +43,14 @@ export async function listPackages({ activeOnly }: { activeOnly: boolean }) {
 }
 
 export async function findActivePackage(id: string) {
+  return findPackage(id, { activeOnly: true });
+}
+
+// The admin can also book a package that's hidden from the site.
+export async function findPackage(id: string, { activeOnly = false } = {}) {
   if (!ObjectId.isValid(id)) return null;
   const collection = await packagesCollection();
-  const doc = await collection.findOne({ _id: new ObjectId(id), active: true });
+  const doc = await collection.findOne({ _id: new ObjectId(id), ...(activeOnly && { active: true }) });
   return doc ? toPackage(doc) : null;
 }
 

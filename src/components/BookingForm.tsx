@@ -8,7 +8,7 @@ import { Controller, useForm, useWatch } from "react-hook-form";
 import type { z } from "zod";
 import DatePicker from "./DatePicker";
 import TimePicker from "./TimePicker";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -187,7 +187,7 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
                       aria-checked={p.id === field.value}
                       onClick={() => field.onChange(p.id)}
                       className={cn(
-                        "h-full w-full border p-4 pb-10 text-left transition",
+                        "h-full w-full border p-4 pb-14 text-left transition",
                         p.id === field.value ? "border-gold bg-gold/10" : "border-cream/20 hover:border-cream/50"
                       )}
                     >
@@ -199,7 +199,7 @@ export default function BookingForm({ packages }: { packages: Package[] }) {
                     {/* Up to this package's card in the Packages section, which lights up as the one in view. */}
                     <a
                       href={`#package-${p.id}`}
-                      className="absolute bottom-3 left-4 text-xs tracking-[0.15em] text-cream-dim uppercase underline-offset-4 hover:text-gold hover:underline"
+                      className={cn(buttonVariants({ size: "sm" }), "absolute bottom-3 left-4 tracking-[0.15em]")}
                     >
                       View details
                     </a>

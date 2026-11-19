@@ -7,6 +7,7 @@ import {
   clientGallerySchema,
   emailSchema,
   loginCodeSchema,
+  manualBookingSchema,
   packageSchema,
   photoDetailsSchema,
   shareLinkSchema,
@@ -36,7 +37,16 @@ import {
 } from "./clientGalleries";
 import { emailDeletionReminder, emailFinalLink, emailProofLink, emailSelectionSubmitted } from "./mailer";
 import { textDeletionReminder, textFinalLink, textProofLink, textSelectionSubmitted } from "./sms";
-import { abandonBooking, cancelPendingBooking, confirmBooking, createBooking, deleteBooking, listBookings } from "./bookings";
+import {
+  abandonBooking,
+  cancelPendingBooking,
+  confirmBooking,
+  createBooking,
+  createManualBooking,
+  deleteBooking,
+  listBookings,
+} from "./bookings";
+import { formatCedis } from "@/data/packages";
 import { blockDate, unavailableDates, unblockDate, upcomingLocks } from "./dateLocks";
 import { initializeTransaction, isValidWebhookSignature, paystackErrorMessage } from "./paystack";
 import { checkLoginCode, endSession, requireAdmin, sendLoginCode, startSession } from "./adminAuth";
@@ -232,6 +242,25 @@ admin.get("/me", (c) => c.json({ email: c.get("adminEmail") }));
 admin.delete("/bookings/:reference", async (c) => {
   if (!(await deleteBooking(c.req.param("reference")))) return c.json({ error: "Booking not found" }, 404);
   return c.json({ ok: true });
+});
+
+// A booking entered by the admin for a client who paid outside the site.
+admin.post("/bookings", async (c) => {
+  const parsed = manualBookingSchema.safeParse(await readJson(c));
+  if (!parsed.success) {
+    return c.json({ error: "Please fix the highlighted fields", fieldErrors: fieldErrors(parsed.error) }, 400);
+  }
+  const result = await createManualBooking(parsed.data, c.get("adminEmail"));
+  if (!result.ok) {
+    const [field, message] =
+      result.reason === "date_taken"
+        ? ["date", "That date is already booked or blocked"]
+        : result.reason === "amount_too_high"
+          ? ["amountPaid", `More than the package price (${formatCedis(result.price ?? 0)})`]
+          : ["packageId", "That package no longer exists"];
+    return c.json({ error: message, fieldErrors: { [field]: message } }, result.reason === "amount_too_high" ? 400 : 409);
+  }
+  return c.json({ booking: result.booking });
 });
 
 // ?q= search, ?page= / ?pageSize= paging, ?all=1 to include unpaid and failed.

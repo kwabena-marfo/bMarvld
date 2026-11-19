@@ -83,7 +83,10 @@ export default function Home() {
               <h1 className="text-cream">
                 <Logo tagline className="text-3xl sm:text-5xl md:text-6xl" />
               </h1>
-              <p className="mx-auto mt-5 max-w-md text-sm text-cream-dim">
+              <p className="mt-5 font-display text-lg text-gold italic sm:text-xl">
+                Pictures that drool poetry <span aria-hidden>🤤</span>
+              </p>
+              <p className="mx-auto mt-3 max-w-md text-sm text-cream-dim">
                 Studio portraits, fashion, kids and milestone moments, captured so you can be marveled, again and again.
               </p>
               <div className="mt-7 flex flex-wrap justify-center gap-3">

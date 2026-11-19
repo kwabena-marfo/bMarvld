@@ -3,6 +3,7 @@ import { formatCedis } from "@/data/packages";
 import type { Booking } from "./bookings";
 import type { GalleryContact } from "./clientGalleries";
 import { formatDate } from "./formatDate";
+import { paymentLine } from "./sms";
 
 const transporter = nodemailer.createTransport({
   service: "gmail",
@@ -64,8 +65,12 @@ const bookingRows = (b: Booking): [string, string][] => [
   ["Date", formatDate(b.date)],
   ["Time", b.time],
   ["Location", b.location],
-  ["Deposit paid", formatCedis(b.deposit)],
-  ["Balance due", formatCedis(b.price - b.deposit)],
+  ...(b.deposit >= b.price
+    ? [["Paid", `${formatCedis(b.price)} (in full)`] as [string, string]]
+    : ([
+        ["Deposit paid", formatCedis(b.deposit)],
+        ["Balance due", formatCedis(b.price - b.deposit)],
+      ] as [string, string][])),
 ];
 
 const clientRows = (b: Booking): [string, string][] => [
@@ -90,23 +95,25 @@ async function trySend(mail: SendMailOptions) {
   }
 }
 
-export async function emailBookingConfirmed(b: Booking) {
+// `admins: false` when the admin entered the booking themselves.
+export async function emailBookingConfirmed(b: Booking, { admins = true } = {}) {
   const date = formatDate(b.date);
   const summary = `${b.packageName}, ${date} at ${b.time}`;
+  const paidInFull = b.deposit >= b.price;
   await Promise.all([
     trySend({
       to: b.email,
       subject: `Your B.Marvld session is confirmed for ${date}`,
-      text: `Hi ${b.name}, your ${summary} (${b.location}) is confirmed. Deposit ${formatCedis(b.deposit)} received; balance ${formatCedis(b.price - b.deposit)} is due on the day. Ref ${b.reference}.`,
+      text: `Hi ${b.name}, your ${summary} (${b.location}) is confirmed. ${paymentLine(b)} Ref ${b.reference}.`,
       html: brandedEmail(
         "Your session is confirmed",
         `Hi ${escape(b.name)}, thank you for booking with B.Marvld. Here are your details:`,
         bookingRows(b),
-        "The balance is due on the day of the shoot. Reply to this email if anything changes. ...be marveled"
+        `${paidInFull ? "" : "The balance is due on the day of the shoot. "}Reply to this email if anything changes. ...be marveled`
       ),
     }),
     trySend({
-      to: adminEmails(),
+      to: admins ? adminEmails() : [],
       replyTo: b.email,
       subject: `New booking from ${b.name}: ${summary}`,
       text: `New booking from ${b.name} (${b.phone}, ${b.email}) for ${summary} at ${b.location}. Deposit ${formatCedis(b.deposit)} paid. Ref ${b.reference}.${b.notes ? ` Notes: ${b.notes}` : ""}`,

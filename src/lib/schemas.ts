@@ -20,6 +20,24 @@ export const bookingSchema = z.object({
 
 export type BookingInput = z.output<typeof bookingSchema>;
 
+export const paymentMethods = ["Cash", "Mobile Money", "Bank transfer", "Other"] as const;
+
+// A booking the admin enters for a client who paid outside the site (cash,
+// MoMo to the studio's number, a transfer). Email is optional and today is allowed.
+export const manualBookingSchema = bookingSchema.extend({
+  email: z.union([z.email("Enter a valid email").trim().toLowerCase(), z.literal("")]),
+  date: z
+    .string("Choose a date")
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Choose a date")
+    .refine((d) => d >= new Date().toISOString().slice(0, 10), "Pick today or a later date"),
+  amountPaid: z.number("Enter the amount paid").positive("Enter the amount paid").max(1_000_000),
+  paymentMethod: z.enum(paymentMethods, "How did they pay?"),
+  paymentNote: z.string().trim().max(200, "Keep it under 200 characters").optional().default(""),
+  notify: z.boolean(), // text and email the client their confirmation
+});
+
+export type ManualBookingInput = z.output<typeof manualBookingSchema>;
+
 export const packageSchema = z.object({
   name: z.string().trim().min(2, "Give the package a name").max(60),
   price: z.number("Enter a price").positive("Price must be more than 0").max(1_000_000),

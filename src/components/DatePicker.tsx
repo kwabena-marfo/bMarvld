@@ -11,19 +11,21 @@ const fromIso = (value: string) => {
   return new Date(y, m - 1, d);
 };
 
-// Inline month calendar: past days, today and unavailable (booked, blocked or
-// held) dates can't be picked. Only rendered after mount, so "today" is the
-// visitor's own.
+// Inline month calendar: past days, today (unless `allowToday`, for the admin)
+// and unavailable (booked, blocked or held) dates can't be picked. Only
+// rendered after mount, so "today" is the visitor's own.
 export default function DatePicker({
   value,
   onChange,
   unavailable,
   invalid,
+  allowToday = false,
 }: {
   value: string;
   onChange: (date: string) => void;
   unavailable: Set<string>;
   invalid?: boolean;
+  allowToday?: boolean;
 }) {
   const [today] = useState(() => {
     const d = new Date();
@@ -38,7 +40,7 @@ export default function DatePicker({
         selected={value ? fromIso(value) : undefined}
         onSelect={(d) => onChange(d ? iso(d) : "")}
         startMonth={today}
-        disabled={[{ before: new Date(today.getTime() + 86_400_000) }, isTaken]}
+        disabled={[{ before: allowToday ? today : new Date(today.getTime() + 86_400_000) }, isTaken]}
         modifiers={{ booked: isTaken }}
         modifiersClassNames={{ booked: "line-through decoration-cream/50" }}
         className="w-full bg-transparent p-0 [--cell-size:--spacing(10)]"

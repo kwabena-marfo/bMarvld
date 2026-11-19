@@ -48,16 +48,22 @@ const adminPhones = () =>
 
 const firstName = (b: Booking) => b.name.split(" ")[0];
 
-export async function notifyBookingConfirmed(b: Booking) {
+// "Deposit of GH₵300 received; balance GH₵700 is due on the day." or, when nothing's left, "Paid in full (GH₵1,000)."
+export const paymentLine = (b: Booking) =>
+  b.deposit >= b.price
+    ? `Paid in full (${formatCedis(b.price)}).`
+    : `Deposit of ${formatCedis(b.deposit)} received; balance ${formatCedis(b.price - b.deposit)} is due on the day.`;
+
+// `admins: false` when the admin entered the booking themselves.
+export async function notifyBookingConfirmed(b: Booking, { admins = true } = {}) {
   await Promise.all([
     trySend(
       [b.phone],
       `Hi ${firstName(b)}, your B.Marvld ${b.packageName} session on ${formatDate(b.date)} at ${b.time} is confirmed. ` +
-        `Deposit of ${formatCedis(b.deposit)} received; balance ${formatCedis(b.price - b.deposit)} is due on the day. ` +
-        `Ref: ${b.reference}. ...be marveled`
+        `${paymentLine(b)} Ref: ${b.reference}. ...be marveled`
     ),
     trySend(
-      adminPhones(),
+      admins ? adminPhones() : [],
       `New booking from ${b.name} (${b.phone}) for ${b.packageName}, ${formatDate(b.date)} ${b.time} at ${b.location}. ` +
         `Deposit ${formatCedis(b.deposit)} paid. Ref ${b.reference}`
     ),

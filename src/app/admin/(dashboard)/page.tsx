@@ -1,6 +1,8 @@
 "use client";
 
-import { Trash2Icon } from "lucide-react";
+import { PlusIcon, Trash2Icon } from "lucide-react";
+import ManualBookingForm from "@/components/ManualBookingForm";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useState } from "react";
 import { toast } from "sonner";
 import { EmptyList, ListPagination, ListSearch, useAdminList, useListParams } from "@/components/AdminList";
@@ -37,7 +39,13 @@ type Booking = {
   notes: string;
   status: BookingStatus;
   createdAt: string;
+  source?: "online" | "manual";
+  payment?: { channel?: string; note?: string };
 };
+
+// A manual booking can be paid in full; online ones only ever take the deposit.
+const statusLabel = (b: Booking) =>
+  b.status === "deposit_paid" && b.deposit >= b.price ? "Paid in full" : statusLabels[b.status];
 
 const statusStyles: Record<BookingStatus, string> = {
   deposit_paid: "",
@@ -62,6 +70,7 @@ export default function BookingsPage() {
   const query = new URLSearchParams({ q, page: String(page), ...(showAll && { all: "1" }) }).toString();
   const { data, error, loading, reload } = useAdminList<BookingList>(`/bookings?${query}`);
   const [confirming, setConfirming] = useState<Booking | null>(null);
+  const [creating, setCreating] = useState(false);
 
   async function remove(b: Booking) {
     try {
@@ -79,11 +88,30 @@ export default function BookingsPage() {
     <>
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <h1 className="font-display text-4xl font-semibold">Bookings</h1>
-        <label className="flex items-center gap-2 text-sm text-cream-dim">
-          <Switch checked={showAll} onCheckedChange={(on) => list.set({ all: on ? "1" : null })} />
-          Include unpaid &amp; failed
-        </label>
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-2 text-sm text-cream-dim">
+            <Switch checked={showAll} onCheckedChange={(on) => list.set({ all: on ? "1" : null })} />
+            Include unpaid &amp; failed
+          </label>
+          <Button onClick={() => setCreating(true)}>
+            <PlusIcon /> New booking
+          </Button>
+        </div>
       </div>
+
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-xl">
+          {creating && (
+            <ManualBookingForm
+              onCreated={(name) => {
+                setCreating(false);
+                toast.success(`${name}'s booking saved`);
+                reload();
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
 
       <ListSearch
         value={q}
@@ -104,11 +132,16 @@ export default function BookingsPage() {
               <p className="text-sm text-cream-dim">
                 <a href={`tel:${b.phone}`} className="hover:text-gold">
                   {b.phone}
-                </a>{" "}
-                ·{" "}
-                <a href={`mailto:${b.email}`} className="hover:text-gold">
-                  {b.email}
                 </a>
+                {b.email && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    <a href={`mailto:${b.email}`} className="hover:text-gold">
+                      {b.email}
+                    </a>
+                  </>
+                )}
               </p>
               {b.notes && <p className="mt-2 text-sm text-cream-dim italic">“{b.notes}”</p>}
             </div>
@@ -120,12 +153,19 @@ export default function BookingsPage() {
                 {b.packageName} · {b.location}
               </p>
               <p className="text-cream-dim">
-                {formatCedis(b.deposit)} deposit{b.depositPercent ? ` (${b.depositPercent}%)` : ""} of{" "}
-                {formatCedis(b.price)} · {b.reference}
+                {b.source === "manual"
+                  ? `${formatCedis(b.deposit)} of ${formatCedis(b.price)} paid by ${b.payment?.channel ?? "hand"}`
+                  : `${formatCedis(b.deposit)} deposit${b.depositPercent ? ` (${b.depositPercent}%)` : ""} of ${formatCedis(b.price)}`}{" "}
+                · {b.reference}
               </p>
+              {b.source === "manual" && (
+                <p className="text-xs text-cream-dim">
+                  Entered by you{b.payment?.note ? ` · Ref ${b.payment.note}` : ""}
+                </p>
+              )}
             </div>
             <div className="flex items-start justify-between gap-2 md:flex-col md:items-end">
-              <Badge className={cn("tracking-wider uppercase", statusStyles[b.status])}>{statusLabels[b.status]}</Badge>
+              <Badge className={cn("tracking-wider uppercase", statusStyles[b.status])}>{statusLabel(b)}</Badge>
               <Button variant="ghost" size="icon-sm" aria-label={`Delete ${b.name}'s booking`} onClick={() => setConfirming(b)}>
                 <Trash2Icon className="text-destructive" />
               </Button>
@@ -139,7 +179,9 @@ export default function BookingsPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete {confirming?.name}&apos;s booking?</AlertDialogTitle>
             <AlertDialogDescription>
-              {confirming?.status === "deposit_paid" || confirming?.status === "needs_refund"
+              {confirming?.source === "manual"
+                ? `${confirming.date} opens up for booking again. Any money they paid you stays with you; refund it yourself if you need to. This can't be undone.`
+                : confirming?.status === "deposit_paid" || confirming?.status === "needs_refund"
                 ? `${confirming.date} opens up for booking again. Their ${formatCedis(confirming.deposit)} deposit isn't refunded automatically; refund it from your Paystack dashboard if you need to. This can't be undone.`
                 : "It's removed from your bookings, and its date is freed if it was still being held. This can't be undone."}
             </AlertDialogDescription>

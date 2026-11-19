@@ -6,9 +6,9 @@ import { verifyTransaction } from "./paystack";
 import { bookDate, holdDate, releaseBookingDate, releaseHold } from "./dateLocks";
 import { notifyBookingClash, notifyBookingConfirmed } from "./sms";
 import { emailBookingClash, emailBookingConfirmed } from "./mailer";
-import { findActivePackage } from "./packages";
+import { findActivePackage, findPackage } from "./packages";
 import { depositFor } from "@/data/packages";
-import type { BookingInput } from "./schemas";
+import type { BookingInput, ManualBookingInput } from "./schemas";
 
 // needs_refund: the deposit was paid, but the date was taken by someone else
 // in the meantime (only possible if checkout outlasted the date hold).
@@ -19,11 +19,13 @@ export type Booking = BookingInput & {
   packageName: string;
   price: number; // GHS
   depositPercent: number;
-  deposit: number; // GHS
+  deposit: number; // GHS paid so far: the Paystack deposit, or what the admin recorded
   status: BookingStatus;
   createdAt: Date;
   paidAt?: Date;
-  payment?: { channel?: string; fees?: number | null };
+  // "manual": entered by the admin for a client who paid outside the site.
+  source?: "online" | "manual";
+  payment?: { channel?: string; fees?: number | null; note?: string; recordedBy?: string };
 };
 
 let indexesEnsured = false;
@@ -66,6 +68,44 @@ export async function createBooking(input: BookingInput): Promise<CreateBookingR
 
   const collection = await bookingsCollection();
   await collection.insertOne(booking);
+  return { ok: true, booking };
+}
+
+export type ManualBookingResult =
+  | { ok: true; booking: Booking }
+  | { ok: false; reason: "package_unavailable" | "date_taken" | "amount_too_high"; price?: number };
+
+// A booking the admin enters for a client who paid in person, by MoMo or by
+// transfer. Nothing goes through Paystack: the date is booked straight away
+// and the amount recorded counts as paid.
+export async function createManualBooking(input: ManualBookingInput, recordedBy: string): Promise<ManualBookingResult> {
+  const { amountPaid, paymentMethod, paymentNote, notify, ...details } = input;
+  const pkg = await findPackage(details.packageId);
+  if (!pkg) return { ok: false, reason: "package_unavailable" };
+  if (amountPaid > pkg.price) return { ok: false, reason: "amount_too_high", price: pkg.price };
+
+  const reference = `BMV-${crypto.randomBytes(6).toString("hex").toUpperCase()}`;
+  if (!(await bookDate(details.date, reference))) return { ok: false, reason: "date_taken" };
+
+  const now = new Date();
+  const booking: Booking = {
+    ...details,
+    reference,
+    packageName: pkg.name,
+    price: pkg.price,
+    depositPercent: Math.round((amountPaid / pkg.price) * 100),
+    deposit: amountPaid,
+    status: "deposit_paid",
+    createdAt: now,
+    paidAt: now,
+    source: "manual",
+    payment: { channel: paymentMethod, note: paymentNote || undefined, recordedBy },
+  };
+
+  const collection = await bookingsCollection();
+  await collection.insertOne(booking);
+  // The admin entered it themselves, so only the client is told.
+  if (notify) await Promise.all([notifyBookingConfirmed(booking, { admins: false }), emailBookingConfirmed(booking, { admins: false })]);
   return { ok: true, booking };
 }
 
