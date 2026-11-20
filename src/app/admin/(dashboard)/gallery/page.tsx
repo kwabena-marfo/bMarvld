@@ -126,6 +126,23 @@ export default function GalleryAdmin() {
     }
   }
 
+  const [moving, setMoving] = useState(false);
+
+  // Moves the selected photos into one category.
+  async function setCategory(category: Shot["category"]) {
+    setMoving(true);
+    try {
+      const { updated } = await sendJson<{ updated: number }>("/api/admin/photos/category", { ids: bulk.chosen, category });
+      toast.success(`${updated} ${updated === 1 ? "photo" : "photos"} moved to ${category}`);
+      bulk.stop();
+      load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not change the category");
+    } finally {
+      setMoving(false);
+    }
+  }
+
   const busy = uploads.some((u) => u.state === "uploading");
   const list = useListParams();
   const found = photos?.filter((p) => matchesSearch(list.q, p.category, p.alt));
@@ -244,6 +261,24 @@ export default function GalleryAdmin() {
         noun={["photo", "photos"]}
         describe={() => "They're removed from the site and from Cloudinary. This can't be undone."}
         onDeleted={load}
+        actions={
+          <Select
+            value={null}
+            onValueChange={(v) => v && setCategory(v as Shot["category"])}
+            disabled={!bulk.chosen.length || moving}
+          >
+            <SelectTrigger size="sm" className="h-7 pl-3 text-xs" aria-label="Set category for the selected photos">
+              <SelectValue placeholder={moving ? "Moving…" : "Set category"} />
+            </SelectTrigger>
+            <SelectContent>
+              {photoCategories.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
         className="mb-4"
       />
 

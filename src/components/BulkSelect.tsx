@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { sendJson } from "@/lib/forms";
 import { cn } from "@/lib/utils";
 
-// Selecting several photos in an admin grid to delete them together.
+// Selecting several photos in an admin grid to delete them (or act on them) together.
 // `ids` are the photos currently shown; anything no longer shown drops out.
 export function useBulkSelect(ids: string[]) {
   const [active, setActive] = useState(false);
@@ -58,6 +58,7 @@ export function BulkBar({
   verb = "Delete",
   describe,
   onDeleted,
+  actions,
   className,
 }: {
   selection: BulkSelection;
@@ -67,6 +68,7 @@ export function BulkBar({
   verb?: string;
   describe: (ids: string[]) => ReactNode;
   onDeleted: () => void;
+  actions?: ReactNode; // more things to do with the selection, shown before Delete
   className?: string;
 }) {
   const [confirming, setConfirming] = useState(false);
@@ -110,10 +112,11 @@ export function BulkBar({
       <Button variant="ghost" size="sm" onClick={n === total ? s.clear : s.selectAll}>
         {n === total ? "Select none" : `Select all ${total}`}
       </Button>
-      <div className="ml-auto flex gap-2">
+      <div className="ml-auto flex flex-wrap gap-2">
         <Button variant="outline" size="sm" onClick={s.stop} disabled={busy}>
           Done
         </Button>
+        {actions}
         <Button variant="destructive" size="sm" disabled={!n || busy} onClick={() => setConfirming(true)}>
           <Trash2Icon /> {busy ? "Working…" : `${verb}${n ? ` ${n}` : ""}`}
         </Button>

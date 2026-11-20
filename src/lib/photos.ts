@@ -44,6 +44,15 @@ export async function removePhoto(id: string) {
   return doc?.publicId ?? null;
 }
 
+// Moves several photos into one category; returns how many were found.
+export async function setPhotosCategory(ids: string[], category: Shot["category"]) {
+  const _ids = ids.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+  if (!_ids.length) return 0;
+  const photos = await photosCollection();
+  const res = await photos.updateMany({ _id: { $in: _ids } }, { $set: { category } });
+  return res.matchedCount;
+}
+
 // Several at once; returns the Cloudinary ids of the ones that existed.
 export async function removePhotos(ids: string[]) {
   const _ids = ids.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));

@@ -61,7 +61,8 @@ import {
   uploadFromUrl,
 } from "./cloudinary";
 import { checkSize, driveDownloadUrl, DriveError, getDriveFile, listDriveLink } from "./googleDrive";
-import { addPhoto, listPhotos, removePhoto, removePhotos } from "./photos";
+import { addPhoto, listPhotos, removePhoto, removePhotos, setPhotosCategory } from "./photos";
+import { photoCategories } from "@/data/gallery";
 import { SITE_URL } from "./siteUrl";
 import { pageParams } from "./listQuery";
 import { listFeaturedForAdmin, removeFeatured } from "./featured";
@@ -390,6 +391,12 @@ admin.post("/photos/delete", async (c) => {
   const publicIds = await removePhotos(body.data.ids);
   await deleteImages(publicIds);
   return c.json({ deleted: publicIds.length });
+});
+
+admin.post("/photos/category", async (c) => {
+  const body = bulkIds.extend({ category: z.enum(photoCategories) }).safeParse(await readJson(c));
+  if (!body.success) return c.json({ error: "Choose photos and a category" }, 400);
+  return c.json({ updated: await setPhotosCategory(body.data.ids, body.data.category) });
 });
 
 admin.delete("/photos/:id", async (c) => {
