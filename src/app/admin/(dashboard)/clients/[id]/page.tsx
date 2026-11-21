@@ -98,15 +98,18 @@ export default function ClientGalleryAdmin() {
     }
   }
 
-  // Numbered for the editor: "1.IMG_3500.JPG.jpeg", "2.IMG_3501.JPG.jpeg", …
-  const pickedNames = picked.map((p, i) => `${i + 1}.${p.name}.jpeg`).join("\n");
+  // Numbered for the editor, keeping each file's own name and extension: "1.IMG_3500.JPG", "2.Felicia-0040.jpg", …
+  const pickedList = picked.map((p, i) => `${i + 1}.${p.name}`);
+  const pickedNames = pickedList.join("\n");
 
-  function copyNames() {
+  function copy(text: string, done: string) {
     navigator.clipboard
-      .writeText(pickedNames)
-      .then(() => toast.success(`${picked.length} file names copied`))
-      .catch(() => toast.error("Couldn't copy. Select the list below instead"));
+      .writeText(text)
+      .then(() => toast.success(done))
+      .catch(() => toast.error("Couldn't copy. Select the text instead"));
   }
+
+  const copyNames = () => copy(pickedNames, `${picked.length} file names copied`);
 
   return (
     <>
@@ -165,7 +168,7 @@ export default function ClientGalleryAdmin() {
               <p className="mt-3 text-xs tracking-[0.2em] text-cream-dim uppercase">
                 They had picked ({gallery.clearedPicks.length})
               </p>
-              <pre className="mt-2 max-h-40 overflow-auto text-xs leading-relaxed text-cream-dim select-all">
+              <pre className="mt-2 max-h-40 overflow-auto text-xs leading-relaxed text-cream-dim select-text">
                 {gallery.clearedPicks.join("\n")}
               </pre>
             </>
@@ -244,9 +247,23 @@ export default function ClientGalleryAdmin() {
             <p className="mb-3 text-xs text-cream-dim">
               The download is full size, with no watermark, and keeps your file names.
             </p>
-            <pre className="max-h-48 overflow-auto border border-cream/10 bg-ink-soft p-4 text-xs leading-relaxed text-cream-dim select-all">
-              {pickedNames}
-            </pre>
+            {/* One row per file: drag to select any lines, or copy a single name with its button. */}
+            <ol className="max-h-72 overflow-auto border border-cream/10 bg-ink-soft py-2 font-mono text-xs text-cream-dim">
+              {pickedList.map((line) => (
+                <li key={line} className="group flex items-center justify-between gap-3 px-4 py-1 hover:bg-cream/5">
+                  <span className="select-text">{line}</span>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    aria-label={`Copy ${line}`}
+                    className="pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 focus-visible:opacity-100"
+                    onClick={() => copy(line, `Copied ${line}`)}
+                  >
+                    <CopyIcon />
+                  </Button>
+                </li>
+              ))}
+            </ol>
           </div>
         )}
       </Step>
