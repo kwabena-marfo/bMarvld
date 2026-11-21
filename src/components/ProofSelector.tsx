@@ -45,6 +45,8 @@ export default function ProofSelector({
 
   const shown = pickedOnly ? photos.filter((p) => selected.has(p.id)) : photos;
   const full = maxSelections !== null && selected.size >= maxSelections;
+  // Possible when the studio lowers the limit after they've picked.
+  const over = maxSelections !== null && selected.size > maxSelections ? selected.size - maxSelections : 0;
 
   const toggle = useCallback(
     async (id: string) => {
@@ -164,7 +166,13 @@ export default function ProofSelector({
         ))}
       </div>
 
-      <PhotoLightbox photos={shown} index={open} onIndex={setOpen} actions={(p) => heart(p.id, "lg")} />
+      <PhotoLightbox
+        photos={shown}
+        index={open}
+        onIndex={setOpen}
+        overlay={(p) => heart(p.id, "sm")}
+        actions={(p) => heart(p.id, "lg")}
+      />
 
       {!submitted && (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-cream/10 bg-ink/90 backdrop-blur-md">
@@ -176,12 +184,16 @@ export default function ProofSelector({
               </p>
               {error ? (
                 <p className="text-sm text-destructive">{error}</p>
+              ) : over ? (
+                <p className="text-sm text-destructive">
+                  You can choose up to {maxSelections}. Unselect {over} to send.
+                </p>
               ) : (
                 <p className="text-xs text-cream-dim">Your choices save as you go, so you can come back any time before you send.</p>
               )}
             </div>
             <AlertDialog>
-              <AlertDialogTrigger render={<Button size="lg" disabled={!selected.size || sending} />}>
+              <AlertDialogTrigger render={<Button size="lg" disabled={!selected.size || over > 0 || sending} />}>
                 {sending ? "Sending…" : "Send my selection"}
               </AlertDialogTrigger>
               <AlertDialogContent>

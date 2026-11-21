@@ -14,11 +14,13 @@ export default function PhotoLightbox<T extends LightboxPhoto>({
   index,
   onIndex,
   actions,
+  overlay,
 }: {
   photos: T[];
   index: number | null;
   onIndex: (index: number | null) => void;
-  actions?: (photo: T) => React.ReactNode;
+  actions?: (photo: T) => React.ReactNode; // under the photo
+  overlay?: (photo: T) => React.ReactNode; // on the photo itself, e.g. a heart in the corner
 }) {
   const count = photos.length;
 
@@ -50,7 +52,10 @@ export default function PhotoLightbox<T extends LightboxPhoto>({
       <div className="relative flex min-h-0 flex-1 items-center justify-center px-12 sm:px-16">
         <div className="viewfinder relative max-h-full p-4 text-cream/70 sm:p-6" onClick={(e) => e.stopPropagation()}>
           {/* Keyed by photo, so stepping drops the old one at once and shows the loader. */}
-          <Frame key={photo.id} photo={photo} />
+          <div className="relative">
+            <Frame key={photo.id} photo={photo} />
+            {overlay?.(photo)}
+          </div>
         </div>
         {count > 1 && (
           <>

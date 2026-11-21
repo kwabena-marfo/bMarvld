@@ -21,6 +21,7 @@ import {
 import { EmptyList, ListPagination, ListSearch, useListParams } from "@/components/AdminList";
 import { BulkBar, SelectOverlay, useBulkSelect } from "@/components/BulkSelect";
 import { DriveImport } from "@/components/DriveImport";
+import PhotoLightbox from "@/components/PhotoLightbox";
 import { fromDrive, fromFiles, MAX_UPLOAD_BYTES, UploadReview, type PendingPhoto } from "@/components/UploadReview";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
@@ -149,6 +150,14 @@ export default function GalleryAdmin() {
   const shown = found && paginate(found, list.page, pageSize);
   // Select all takes every photo matching the search, on every page.
   const bulk = useBulkSelect(found?.flatMap((p) => (p.id ? [p.id] : [])) ?? []);
+  // Full-screen preview, stepping through the photos on this page.
+  const [open, setOpen] = useState<number | null>(null);
+  const previews = (shown?.items ?? []).map((p, i) => ({
+    ...p,
+    id: p.id ?? String(i),
+    // Cloudinary serves a 1600px copy rather than the full original (up to 10 MB).
+    full: p.src.replace("/image/upload/", "/image/upload/w_1600,h_1600,c_limit,q_auto,f_auto/"),
+  }));
 
   return (
     <>
@@ -282,10 +291,29 @@ export default function GalleryAdmin() {
         className="mb-4"
       />
 
+      <PhotoLightbox
+        photos={previews}
+        index={open}
+        onIndex={setOpen}
+        actions={(p) => (
+          <p className="text-sm text-cream-dim">
+            <span className="tracking-wider text-cream uppercase">{p.category}</span>
+            {p.alt && ` · ${p.alt}`}
+          </p>
+        )}
+      />
+
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {shown?.items.map((p) => (
+        {shown?.items.map((p, i) => (
           <div key={p.id} className="group relative aspect-square overflow-hidden bg-ink-soft">
-            <Image src={p.src} alt={p.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
+            <button
+              type="button"
+              className="absolute inset-0 cursor-zoom-in"
+              onClick={() => setOpen(i)}
+              aria-label={`View ${p.alt || p.category} photo`}
+            >
+              <Image src={p.src} alt={p.alt} fill sizes="(min-width: 1024px) 25vw, 50vw" className="object-cover" />
+            </button>
             {p.id && <SelectOverlay selection={bulk} id={p.id} label={p.alt || p.category} />}
             <div className="absolute inset-x-0 bottom-0 flex items-center justify-between bg-linear-to-t from-ink/90 p-2 pl-3 text-xs">
               <span className="tracking-wider uppercase">{p.category}</span>

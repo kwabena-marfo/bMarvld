@@ -130,6 +130,7 @@ export async function getGalleryForAdmin(id: string, baseUrl: string) {
     width: p.width,
     height: p.height,
     src: privateImageUrl(p.publicId, { width: 600 }),
+    full: privateImageUrl(p.publicId, { width: 1600 }), // for the preview
   });
   return {
     id: g._id.toString(),
@@ -313,7 +314,14 @@ export async function setProofSelected(token: string, photoId: string, selected:
 export async function submitSelection(token: string) {
   const collection = await galleries();
   const g = await collection.findOneAndUpdate(
-    { "proofLink.token": token, "proofLink.expiresAt": { $gt: new Date() }, submittedAt: { $exists: false }, "selected.0": { $exists: true } },
+    {
+      "proofLink.token": token,
+      "proofLink.expiresAt": { $gt: new Date() },
+      submittedAt: { $exists: false },
+      "selected.0": { $exists: true },
+      // Not over the limit (the admin may have lowered it after they picked).
+      $expr: { $or: [{ $not: ["$maxSelections"] }, { $lte: [{ $size: "$selected" }, "$maxSelections"] }] },
+    },
     { $set: { submittedAt: new Date(), updatedAt: new Date() } },
     { returnDocument: "after" }
   );

@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { BulkBar, SelectOverlay, useBulkSelect } from "@/components/BulkSelect";
 import { DriveImport } from "@/components/DriveImport";
+import PhotoLightbox from "@/components/PhotoLightbox";
 import { fromDrive, fromFiles, MAX_UPLOAD_BYTES, UploadReview, type PendingPhoto } from "@/components/UploadReview";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -32,7 +33,7 @@ import { formatDate } from "@/lib/formatDate";
 import { sendJson } from "@/lib/forms";
 import { cn } from "@/lib/utils";
 
-type Photo = { id: string; name: string; width: number; height: number; src: string };
+type Photo = { id: string; name: string; width: number; height: number; src: string; full: string };
 type ShareInfo = { url: string; expiresAt: string };
 type Gallery = {
   id: string;
@@ -205,6 +206,7 @@ export default function ClientGalleryAdmin() {
             : "There's no limit on how many they can choose."
         }
       >
+        <SelectionLimit key={String(gallery.maxSelections)} galleryId={id} value={gallery.maxSelections} picked={picked.length} onSaved={load} />
         {gallery.submittedAt ? (
           <div className="mb-6 border border-gold/40 bg-gold/5 p-4 text-sm">
             <p>
@@ -299,6 +301,75 @@ function Step({ n, title, hint, children }: { n: number; title: string; hint: st
       <p className="mt-1 mb-6 text-sm text-cream-dim">{hint}</p>
       {children}
     </section>
+  );
+}
+
+// How many photos the client may pick; empty for no limit.
+function SelectionLimit({
+  galleryId,
+  value,
+  picked,
+  onSaved,
+}: {
+  galleryId: string;
+  value: number | null;
+  picked: number;
+  onSaved: () => void;
+}) {
+  const [draft, setDraft] = useState(value === null ? "" : String(value));
+  const [busy, setBusy] = useState(false);
+  const next = draft.trim() === "" ? null : Number(draft);
+  const valid = next === null || (Number.isInteger(next) && next >= 1 && next <= 1000);
+  const changed = next !== value;
+
+  async function save() {
+    setBusy(true);
+    try {
+      await sendJson(`/api/admin/clients/${galleryId}`, { maxSelections: next }, "PATCH");
+      toast.success(next === null ? "No limit on picks now" : `They can now pick up to ${next}`);
+      onSaved();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not save the limit");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="mb-6">
+      <form
+        className="flex flex-wrap items-center gap-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valid && changed) save();
+        }}
+      >
+        <label className="flex items-center gap-2 text-sm text-cream-dim">
+          Photos they can pick
+          <Input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={1000}
+            placeholder="No limit"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            aria-invalid={!valid}
+            className="w-28"
+          />
+        </label>
+        <Button type="submit" variant="outline" disabled={!valid || !changed || busy}>
+          {busy ? "Saving…" : "Save"}
+        </Button>
+      </form>
+      <p className={cn("mt-2 text-xs", valid ? "text-cream-dim" : "text-destructive")}>
+        {!valid
+          ? "Use a whole number from 1 to 1000, or leave it empty for no limit."
+          : next !== null && picked > next
+            ? `They've already picked ${picked}; they'll need to unselect ${picked - next} before they can send.`
+            : "Leave empty for no limit. The client sees the new number next time they open their link."}
+      </p>
+    </div>
   );
 }
 
@@ -405,6 +476,7 @@ function PhotoGrid({
 }) {
   // One confirm dialog for the whole grid, opened for the photo being deleted.
   const [confirming, setConfirming] = useState<Photo | null>(null);
+  const [open, setOpen] = useState<number | null>(null);
   const bulk = useBulkSelect(photos.map((p) => p.id));
 
   function describeBulk(ids: string[]) {
@@ -460,20 +532,39 @@ function PhotoGrid({
         onDeleted={onRemoved}
         className="mb-3"
       />
+      <PhotoLightbox
+        photos={photos}
+        index={open}
+        onIndex={setOpen}
+        actions={(p) => (
+          <p className="flex items-center gap-2 text-sm text-cream-dim">
+            {selected?.has(p.id) &&
+              (kind === "proofs" ? (
+                <HeartIcon className="size-4 fill-gold text-gold" aria-label="Picked" />
+              ) : (
+                <StarIcon className="size-4 fill-gold text-gold" aria-label="Featured" />
+              ))}
+            {p.name}
+            {selected?.has(p.id) && (kind === "proofs" ? " · picked by the client" : " · featured on the site")}
+          </p>
+        )}
+      />
       <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
-        {photos.map((p) => {
+        {photos.map((p, i) => {
           const isPicked = selected?.has(p.id);
           return (
             <figure key={p.id} className={cn("group relative bg-ink-soft", isPicked && "ring-2 ring-gold")}>
               <SelectOverlay selection={bulk} id={p.id} label={p.name} />
-              <Image
-                src={p.src}
-                alt={p.name}
-                width={p.width}
-                height={p.height}
-                unoptimized
-                className="aspect-square w-full object-cover"
-              />
+              <button type="button" className="block w-full cursor-zoom-in" onClick={() => setOpen(i)} aria-label={`View ${p.name}`}>
+                <Image
+                  src={p.src}
+                  alt={p.name}
+                  width={p.width}
+                  height={p.height}
+                  unoptimized
+                  className="aspect-square w-full object-cover"
+                />
+              </button>
               {/* Proofs: the client picked it. Edits: they featured it on the site. */}
               {isPicked &&
                 (kind === "proofs" ? (

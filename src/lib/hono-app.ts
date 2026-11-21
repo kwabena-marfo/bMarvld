@@ -430,11 +430,15 @@ admin.get("/clients/:id", async (c) => {
 });
 
 admin.patch("/clients/:id", async (c) => {
-  const parsed = clientGallerySchema.partial().safeParse(await readJson(c));
+  const body = await readJson(c);
+  const parsed = clientGallerySchema.partial().safeParse(body);
   if (!parsed.success) {
     return c.json({ error: "Please fix the highlighted fields", fieldErrors: fieldErrors(parsed.error) }, 400);
   }
-  if (!(await updateGallery(c.req.param("id"), parsed.data))) return c.json({ error: "Gallery not found" }, 404);
+  // Only the fields sent: defaults (e.g. an empty booking reference) mustn't overwrite the rest.
+  const sent = body && typeof body === "object" ? Object.keys(body) : [];
+  const changes = Object.fromEntries(Object.entries(parsed.data).filter(([k]) => sent.includes(k)));
+  if (!(await updateGallery(c.req.param("id"), changes))) return c.json({ error: "Gallery not found" }, 404);
   return c.json({ ok: true });
 });
 
@@ -608,7 +612,12 @@ app.post("/photos/:token/feature", async (c) => {
 
 app.post("/proofs/:token/submit", async (c) => {
   const g = await submitSelection(c.req.param("token"));
-  if (!g) return c.json({ error: "Choose at least one photo first. If you have, this link has closed" }, 409);
+  if (!g) {
+    return c.json(
+      { error: "Choose at least one photo, and no more than your limit. If you have, this link has closed" },
+      409
+    );
+  }
   const adminUrl = `${appUrl(c)}/admin/clients/${g.id}`;
   await Promise.all([textSelectionSubmitted(g, adminUrl), emailSelectionSubmitted(g, adminUrl)]);
   return c.json({ ok: true });
