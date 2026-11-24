@@ -25,6 +25,9 @@ export type ClientPhoto = {
   name: string; // the original file name, so the admin can find the photo to edit
   width: number;
   height: number;
+  // When it was shot (camera data), for showing the gallery in shooting order.
+  // Null: it has no camera data. Missing: not looked up yet (uploaded before this was recorded).
+  takenAt?: Date | null;
 };
 
 type ShareLink = { token: string; expiresAt: Date };
@@ -65,6 +68,54 @@ const folderFor = (id: string, kind: PhotoKind) => `${clientsFolder}/${id}/${kin
 const newToken = () => crypto.randomBytes(18).toString("base64url");
 const isLive = (link?: ShareLink) => !!link && link.expiresAt > new Date();
 const byName = (a: ClientPhoto, b: ClientPhoto) => a.name.localeCompare(b.name, undefined, { numeric: true });
+
+// Earliest shot first. Photos with no time go last, by file name, as do ties.
+const byTime = (a: ClientPhoto, b: ClientPhoto) => {
+  const ta = a.takenAt?.getTime();
+  const tb = b.takenAt?.getTime();
+  if (ta !== undefined && tb !== undefined && ta !== tb) return ta - tb;
+  if (ta !== undefined && tb === undefined) return -1;
+  if (ta === undefined && tb !== undefined) return 1;
+  return byName(a, b);
+};
+const inShootingOrder = (photos: ClientPhoto[]) => [...photos].sort(byTime);
+
+const BACKFILL = 60; // photos looked up per visit; Cloudinary allows a few hundred lookups an hour
+
+/**
+ * Galleries uploaded before shooting times were recorded: looks up a batch of
+ * their photos' times on Cloudinary and saves them, so the gallery settles into
+ * shooting order over a visit or two. Changes `g` in place too.
+ */
+async function fillShootingTimes(g: GalleryDoc & { _id: ObjectId }) {
+  const missing = (["proofs", "finals"] as const)
+    .flatMap((kind) => g[kind].filter((p) => p.takenAt === undefined).map((photo) => ({ kind, photo })))
+    .slice(0, BACKFILL);
+  if (!missing.length) return;
+
+  const queue = [...missing];
+  const found: typeof missing = [];
+  const worker = async () => {
+    for (let next = queue.shift(); next; next = queue.shift()) {
+      const image = await getPrivateImage(next.photo.publicId, folderFor(g._id.toString(), next.kind)).catch(() => null);
+      if (!image) continue; // e.g. over Cloudinary's hourly limit: tried again next visit
+      next.photo.takenAt = image.takenAt;
+      found.push(next);
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, worker));
+  if (!found.length) return;
+
+  await (await galleries()).bulkWrite(
+    found.map(({ kind, photo }) => ({
+      updateOne: {
+        filter: { _id: g._id },
+        update: { $set: { [`${kind}.$[p].takenAt`]: photo.takenAt } },
+        arrayFilters: [{ "p.id": photo.id }],
+      },
+    }))
+  );
+}
 
 function statusOf(g: GalleryDoc): GalleryStatus {
   if (g.clearedAt) return "cleared";
@@ -124,6 +175,7 @@ export async function getGalleryForAdmin(id: string, baseUrl: string) {
   const _id = oid(id);
   const g = _id && (await (await galleries()).findOne({ _id }));
   if (!g) return null;
+  await fillShootingTimes(g);
   const thumb = (p: ClientPhoto) => ({
     id: p.id,
     name: p.name,
@@ -141,11 +193,11 @@ export async function getGalleryForAdmin(id: string, baseUrl: string) {
     maxSelections: g.maxSelections,
     bookingReference: g.bookingReference,
     status: statusOf(g),
-    proofs: g.proofs.map(thumb),
+    proofs: inShootingOrder(g.proofs).map(thumb),
     selected: g.selected,
     submittedAt: g.submittedAt,
     proofLink: linkInfo(baseUrl, "proof", g.proofLink),
-    finals: g.finals.map(thumb),
+    finals: inShootingOrder(g.finals).map(thumb),
     finalLink: linkInfo(baseUrl, "final", g.finalLink),
     deliveredAt: g.deliveredAt,
     featured: g.featured ?? [],
@@ -177,12 +229,20 @@ export function uploadFolderFor(id: string, kind: PhotoKind) {
 
 // Records a photo the admin's browser uploaded straight to Cloudinary, after
 // checking it's really there and in this gallery's folder.
-export async function addPhoto(id: string, kind: PhotoKind, publicId: string, name: string) {
+// `fileTime` is the shooting time the browser read from a big proof before scaling
+// it down (which drops the camera data), used when Cloudinary finds none.
+export async function addPhoto(id: string, kind: PhotoKind, publicId: string, name: string, fileTime?: Date) {
   const _id = oid(id);
   if (!_id) return null;
   const image = await getPrivateImage(publicId, folderFor(id, kind));
   if (!image) return null;
-  const photo: ClientPhoto = { id: crypto.randomBytes(6).toString("hex"), publicId, name, ...image };
+  const photo: ClientPhoto = {
+    id: crypto.randomBytes(6).toString("hex"),
+    publicId,
+    name,
+    ...image,
+    takenAt: image.takenAt ?? fileTime ?? null,
+  };
   const res = await (await galleries()).updateOne(
     { _id },
     { $push: { [kind]: photo }, $set: { updatedAt: new Date() } }
@@ -268,6 +328,7 @@ export async function getProofGallery(token: string) {
   const g = await (await galleries()).findOne({ "proofLink.token": token });
   if (!g) return null;
   if (!isLive(g.proofLink)) return { expired: true as const, clientName: g.clientName };
+  await fillShootingTimes(g);
   return {
     expired: false as const,
     clientName: g.clientName,
@@ -276,7 +337,7 @@ export async function getProofGallery(token: string) {
     expiresAt: g.proofLink!.expiresAt,
     submitted: !!g.submittedAt,
     selected: g.selected,
-    photos: [...g.proofs].sort(byName).map((p) => ({
+    photos: inShootingOrder(g.proofs).map((p) => ({
       id: p.id,
       width: p.width,
       height: p.height,
@@ -333,6 +394,7 @@ export async function getFinalGallery(token: string) {
   const g = await (await galleries()).findOne({ "finalLink.token": token });
   if (!g) return null;
   if (!isLive(g.finalLink)) return { expired: true as const, clientName: g.clientName };
+  await fillShootingTimes(g);
   return {
     expired: false as const,
     clientName: g.clientName,
@@ -340,7 +402,7 @@ export async function getFinalGallery(token: string) {
     expiresAt: g.finalLink!.expiresAt,
     featured: g.featured ?? [],
     maxFeatured: MAX_FEATURED,
-    photos: [...g.finals].sort(byName).map((p) => ({
+    photos: inShootingOrder(g.finals).map((p) => ({
       id: p.id,
       width: p.width,
       height: p.height,
@@ -458,7 +520,7 @@ export async function clearExpiredGalleries(now = new Date()) {
       {
         $set: {
           clearedAt: new Date(),
-          clearedPicks: g.proofs.filter((p) => selected.has(p.id)).map((p) => p.name),
+          clearedPicks: inShootingOrder(g.proofs).filter((p) => selected.has(p.id)).map((p) => p.name),
           proofs: [],
           finals: [],
           selected: [],

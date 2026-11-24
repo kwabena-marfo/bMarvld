@@ -86,14 +86,32 @@ export function signPrivateUpload(folder: string) {
   };
 }
 
+// Its size, and when it was taken (from the camera's data), so galleries show in shooting order.
 export async function getPrivateImage(publicId: string, folder: string) {
   if (!publicId.startsWith(`${folder}/`)) return null;
   try {
-    const res = await cloudinary.api.resource(publicId, { resource_type: "image", type: "authenticated" });
-    return { width: res.width as number, height: res.height as number };
+    const res = await cloudinary.api.resource(publicId, { resource_type: "image", type: "authenticated", image_metadata: true });
+    return { width: res.width as number, height: res.height as number, takenAt: takenAtFrom(res.image_metadata) };
   } catch {
     return null;
   }
+}
+
+/**
+ * When the photo was taken, from its camera data ("2026:11:23 11:59:48", plus
+ * hundredths and the time zone when the camera records them). Null if it has none,
+ * e.g. a screenshot or a photo whose data was stripped.
+ */
+export function takenAtFrom(meta?: Record<string, string>): Date | null {
+  const raw = meta?.DateTimeOriginal ?? meta?.CreateDate ?? meta?.DateCreated;
+  const m = raw?.match(/^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const sub = meta?.SubSecTimeOriginal?.match(/^\d+/)?.[0];
+  const ms = sub ? Math.round(Number(`0.${sub}`) * 1000) : 0;
+  const offset = meta?.OffsetTimeOriginal?.match(/^([+-])(\d{2}):(\d{2})$/);
+  const offsetMs = offset ? (offset[1] === "-" ? -1 : 1) * (Number(offset[2]) * 60 + Number(offset[3])) * 60_000 : 0;
+  const time = Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6], ms) - offsetMs;
+  return Number.isNaN(time) || +m[1] < 1990 ? null : new Date(time);
 }
 
 export function privateImageUrl(publicId: string, { width, watermark = false }: { width: number; watermark?: boolean }) {

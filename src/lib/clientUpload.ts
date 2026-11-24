@@ -46,5 +46,23 @@ export async function uploadClientPhoto(galleryId: string, kind: PhotoKind, file
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message ?? "Upload failed");
 
-  await sendJson(base, { publicId: data.public_id, name: file.name });
+  // Scaling down drops the camera data, so its shooting time is read from the original here.
+  const fileTime = tooBig ? await shootingTime(file) : undefined;
+  await sendJson(base, { publicId: data.public_id, name: file.name, fileTime });
+}
+
+/**
+ * When the photo was taken, from the camera data near the start of the file: the
+ * earliest "2026:11:23 11:59:48" stamp there (later ones are edit times).
+ */
+async function shootingTime(file: File) {
+  try {
+    const head = new TextDecoder("latin1").decode(await file.slice(0, 256 * 1024).arrayBuffer());
+    const times = [...head.matchAll(/(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})/g)]
+      .map((m) => Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]))
+      .filter((t) => !Number.isNaN(t) && t > Date.UTC(1990, 0, 1));
+    return times.length ? Math.min(...times) : undefined;
+  } catch {
+    return undefined;
+  }
 }

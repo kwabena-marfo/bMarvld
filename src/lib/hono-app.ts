@@ -456,9 +456,12 @@ admin.post("/clients/:id/:kind{proofs|finals}/sign", (c) => {
 
 admin.post("/clients/:id/:kind{proofs|finals}", async (c) => {
   const kind = photoKind.safeParse(c.req.param("kind"));
-  const body = z.object({ publicId: z.string().min(1), name: z.string().max(200) }).safeParse(await readJson(c));
+  const body = z
+    .object({ publicId: z.string().min(1), name: z.string().max(200), fileTime: z.number().positive().optional() })
+    .safeParse(await readJson(c));
   if (!kind.success || !body.success) return c.json({ error: "Invalid photo" }, 400);
-  const photo = await addClientPhoto(c.req.param("id"), kind.data, body.data.publicId, body.data.name);
+  const { publicId, name, fileTime } = body.data;
+  const photo = await addClientPhoto(c.req.param("id"), kind.data, publicId, name, fileTime ? new Date(fileTime) : undefined);
   if (!photo) return c.json({ error: "Upload not found on Cloudinary" }, 400);
   return c.json({ ok: true });
 });
