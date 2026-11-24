@@ -3,6 +3,7 @@
 import { HeartIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 import ClientPhotoTile from "./ClientPhotoTile";
+import OrderedColumns from "./OrderedColumns";
 import PhotoLightbox from "./PhotoLightbox";
 import {
   AlertDialog,
@@ -150,7 +151,7 @@ export default function ProofSelector({
         <p className="py-16 text-center text-cream-dim">Tap the heart on the photos you love to add them here.</p>
       )}
 
-      <div className="columns-2 gap-3 pb-32 sm:columns-3 lg:columns-4">
+      <OrderedColumns className="pb-32">
         {shown.map((p, i) => (
           <ClientPhotoTile
             key={p.id}
@@ -164,7 +165,7 @@ export default function ProofSelector({
             {heart(p.id, "sm")}
           </ClientPhotoTile>
         ))}
-      </div>
+      </OrderedColumns>
 
       <PhotoLightbox
         photos={shown}

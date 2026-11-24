@@ -3,6 +3,7 @@
 import { DownloadIcon, StarIcon } from "lucide-react";
 import { useState } from "react";
 import ClientPhotoTile from "./ClientPhotoTile";
+import OrderedColumns from "./OrderedColumns";
 import PhotoLightbox from "./PhotoLightbox";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -118,7 +119,7 @@ export default function FinalGallery({
         </p>
       </div>
 
-      <div className="columns-2 gap-3 sm:columns-3 lg:columns-4">
+      <OrderedColumns>
         {photos.map((p, i) => (
           <ClientPhotoTile
             key={p.id}
@@ -133,7 +134,7 @@ export default function FinalGallery({
             {download(p, "sm")}
           </ClientPhotoTile>
         ))}
-      </div>
+      </OrderedColumns>
 
       <PhotoLightbox
         photos={photos}
